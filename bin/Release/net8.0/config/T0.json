@@ -1,0 +1,8 @@
+{
+  "territoryName": "T0",
+  "outputSubdirectory": "T0",
+  "geographySeed": "THRONEWORLD",
+  "historySeed": "THRONEWORLD",
+  "starCount": 7000,
+  "minimumStarDistanceLy": 4.0
+}

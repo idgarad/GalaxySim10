@@ -1,0 +1,16 @@
+C:\Users\idgarad\Documents\Git Projects\GalaxySim10\bin\Release\net8.0\GalaxySim10.exe
+C:\Users\idgarad\Documents\Git Projects\GalaxySim10\bin\Release\net8.0\GalaxySim10.deps.json
+C:\Users\idgarad\Documents\Git Projects\GalaxySim10\bin\Release\net8.0\GalaxySim10.runtimeconfig.json
+C:\Users\idgarad\Documents\Git Projects\GalaxySim10\bin\Release\net8.0\GalaxySim10.dll
+C:\Users\idgarad\Documents\Git Projects\GalaxySim10\bin\Release\net8.0\GalaxySim10.pdb
+C:\Users\idgarad\Documents\Git Projects\GalaxySim10\obj\Release\net8.0\GalaxySim10.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\idgarad\Documents\Git Projects\GalaxySim10\obj\Release\net8.0\GalaxySim10.AssemblyInfoInputs.cache
+C:\Users\idgarad\Documents\Git Projects\GalaxySim10\obj\Release\net8.0\GalaxySim10.AssemblyInfo.cs
+C:\Users\idgarad\Documents\Git Projects\GalaxySim10\obj\Release\net8.0\GalaxySim10.csproj.CoreCompileInputs.cache
+C:\Users\idgarad\Documents\Git Projects\GalaxySim10\obj\Release\net8.0\GalaxySim10.dll
+C:\Users\idgarad\Documents\Git Projects\GalaxySim10\obj\Release\net8.0\refint\GalaxySim10.dll
+C:\Users\idgarad\Documents\Git Projects\GalaxySim10\obj\Release\net8.0\GalaxySim10.pdb
+C:\Users\idgarad\Documents\Git Projects\GalaxySim10\obj\Release\net8.0\GalaxySim10.genruntimeconfig.cache
+C:\Users\idgarad\Documents\Git Projects\GalaxySim10\obj\Release\net8.0\ref\GalaxySim10.dll
+C:\Users\idgarad\Documents\Git Projects\GalaxySim10\bin\Release\net8.0\config\T0.json
+C:\Users\idgarad\Documents\Git Projects\GalaxySim10\bin\Release\net8.0\config\test.json

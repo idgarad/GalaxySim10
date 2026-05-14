@@ -1,0 +1,350 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "run territory sizing utility",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"run",
+				"--project",
+				"GalaxySim10.csproj",
+				"-c",
+				"Release"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "run territory sizing utility",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"run",
+				"--project",
+				"GalaxySim10.csproj",
+				"-c",
+				"Release"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "list dotnet runtimes",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"--list-runtimes"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "run territory sizing utility (powershell)",
+			"type": "shell",
+			"command": "dotnet",
+			"args": [
+				"run",
+				"--project",
+				"GalaxySim10.csproj",
+				"-c",
+				"Release"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "capture territory sizing output",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"dotnet run --project GalaxySim10.csproj -c Release | Tee-Object -FilePath territory-sizing-output.txt"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "validate fixed territory utility",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"dotnet run --project GalaxySim10.csproj -c Release | Tee-Object -FilePath territory-sizing-output.txt"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "run test config",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"dotnet run --project GalaxySim10.csproj -c Release -- --config test"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "run production config",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"dotnet run --project GalaxySim10.csproj -c Release -- --config production"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "run bootstrap test config",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"dotnet run --project GalaxySim10.csproj -c Release -- --config test"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "run bootstrap production config",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"dotnet run --project GalaxySim10.csproj -c Release -- --config production"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "run default territory config",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"dotnet run --project GalaxySim10.csproj -c Release"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "run T0 territory config",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"dotnet run --project GalaxySim10.csproj -c Release -- --config T0"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "rerun default territory config",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"dotnet run --project GalaxySim10.csproj -c Release"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "rerun T0 territory config",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"dotnet run --project GalaxySim10.csproj -c Release -- --config T0"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "run TEST territory config",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"dotnet run --project GalaxySim10.csproj -c Release"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "run T0 named seed config",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"dotnet run --project GalaxySim10.csproj -c Release -- --config T0"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "run TEST output bootstrap",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"dotnet run --project GalaxySim10.csproj -c Release"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "run T0 output bootstrap",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"dotnet run --project GalaxySim10.csproj -c Release -- --config T0"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "generate TEST star map svg",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"dotnet run --project GalaxySim10.csproj -c Release"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "generate T0 star map svg",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"dotnet run --project GalaxySim10.csproj -c Release -- --config T0"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "regenerate T0 squashed star map",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"dotnet run --project GalaxySim10.csproj -c Release -- --config T0"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "regenerate TEST squashed star map",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"dotnet run --project GalaxySim10.csproj -c Release"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "regenerate TEST aspect-correct star map",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"dotnet run --project GalaxySim10.csproj -c Release"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "regenerate TEST guided star map",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"dotnet run --project GalaxySim10.csproj -c Release"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "regenerate TEST xyz guided star map",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"dotnet run --project GalaxySim10.csproj -c Release"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "regenerate TEST textured star map",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"dotnet run --project GalaxySim10.csproj -c Release"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "generate TEST region structure svg",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"dotnet run --project GalaxySim10.csproj -c Release"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "regenerate TEST region boundaries svg",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"dotnet run --project GalaxySim10.csproj -c Release"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "regenerate TEST region wireframe svg",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"dotnet run --project GalaxySim10.csproj -c Release"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "generate TEST shaded region structure svg",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"dotnet run --project GalaxySim10.csproj -c Release"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "generate TEST interactive 3d region viewer",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"dotnet run --project GalaxySim10.csproj -c Release"
+			],
+			"isBackground": false
+		}
+	]
+}

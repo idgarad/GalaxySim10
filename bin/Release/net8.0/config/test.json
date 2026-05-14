@@ -1,0 +1,8 @@
+{
+  "territoryName": "TEST",
+  "outputSubdirectory": "test",
+  "geographySeed": "TEST-GEOGRAPHY",
+  "historySeed": "TEST-HISTORY",
+  "starCount": 5000,
+  "minimumStarDistanceLy": 4.0
+}
