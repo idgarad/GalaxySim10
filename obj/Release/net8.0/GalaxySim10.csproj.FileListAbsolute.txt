@@ -14,3 +14,4 @@ C:\Users\idgarad\Documents\Git Projects\GalaxySim10\obj\Release\net8.0\GalaxySim
 C:\Users\idgarad\Documents\Git Projects\GalaxySim10\obj\Release\net8.0\ref\GalaxySim10.dll
 C:\Users\idgarad\Documents\Git Projects\GalaxySim10\bin\Release\net8.0\config\T0.json
 C:\Users\idgarad\Documents\Git Projects\GalaxySim10\bin\Release\net8.0\config\test.json
+C:\Users\idgarad\Documents\Git Projects\GalaxySim10\obj\Release\net8.0\GalaxySim10.sourcelink.json

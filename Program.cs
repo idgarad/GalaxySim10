@@ -3749,7 +3749,7 @@ static class TerritorySolarSystemValidationReportRenderer
         var random = new Random(seed);
         var star = GenerateStarProfile(random);
         var planets = GeneratePlanetProfiles(random, star, draft.SourceType);
-        var displayName = GenerateSystemDisplayName(draft.RegionIndex, draft.SectorIndex, creationOrder, star, planets);
+        var displayName = GenerateSystemDisplayName(creationOrder, star, planets);
         star = star with { StarName = displayName + " Primary" };
         planets = ApplyPlanetNames(planets, displayName);
         var habitableCount = planets.Count(planet => planet.IsHabitable);
@@ -3783,11 +3783,9 @@ static class TerritorySolarSystemValidationReportRenderer
         return $"{sourceType} profile. Inner orbit opens with {innerWorld.PlanetType.ToLowerInvariant()} conditions at {innerWorld.SemiMajorAxisAu:0.00} AU while the outer fringe ends in {outerWorld.PlanetType.ToLowerInvariant()} territory at {outerWorld.SemiMajorAxisAu:0.00} AU. {habitabilityText}{ringText}";
     }
 
-    private static string GenerateSystemDisplayName(int regionIndex, int sectorIndex, int creationOrder, GeneratedStarProfile star, IReadOnlyList<GeneratedPlanetProfile> planets)
+    private static string GenerateSystemDisplayName(int creationOrder, GeneratedStarProfile star, IReadOnlyList<GeneratedPlanetProfile> planets)
     {
-        var trsPrefix = BuildTrsPrefix(regionIndex, sectorIndex);
-        var proceduralName = GenerateProceduralSystemName(creationOrder, star, planets);
-        return $"{trsPrefix}-{proceduralName}";
+        return GenerateProceduralSystemName(creationOrder, star, planets);
     }
 
     private static string BuildTrsPrefix(int regionIndex, int sectorIndex)
