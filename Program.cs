@@ -78,72 +78,86 @@ sealed class TerritoryGenerator
         var outputRoot = Path.Combine(Directory.GetCurrentDirectory(), "output");
         var outputDirectory = Path.Combine(outputRoot, config.OutputSubdirectory);
         Directory.CreateDirectory(outputDirectory);
+        var territoryOutputDirectory = Path.Combine(outputDirectory, "territory");
+        var regionOutputDirectory = Path.Combine(outputDirectory, "region");
+        var sectorOutputDirectory = Path.Combine(outputDirectory, "sector");
+        Directory.CreateDirectory(territoryOutputDirectory);
+        Directory.CreateDirectory(regionOutputDirectory);
+        Directory.CreateDirectory(sectorOutputDirectory);
+        DeleteLegacyRootOutputFiles(outputDirectory);
+        DeleteStaleSystemMapArtifacts(sectorOutputDirectory);
 
         var structureGenerator = new TerritoryRegionStructureGenerator();
         var territory = structureGenerator.Generate(config);
         var networkSnapshot = TerritorySolarSystemValidationReportRenderer.BuildSnapshot(config, territory);
 
-        var diagramPath = Path.Combine(outputDirectory, "DIAG_Territory_RegionStructure_VIEW.svg");
+        var diagramPath = Path.Combine(territoryOutputDirectory, "DIAG_Territory_RegionStructure_VIEW.svg");
         var wireframeSvg = TerritoryRegionStructureSvgRenderer.Render(config, territory, shaded: false);
         File.WriteAllText(diagramPath, wireframeSvg, Encoding.UTF8);
 
-        var shadedDiagramPath = Path.Combine(outputDirectory, "DIAG_Territory_RegionStructure_SHADED_VIEW.svg");
+        var shadedDiagramPath = Path.Combine(territoryOutputDirectory, "DIAG_Territory_RegionStructure_SHADED_VIEW.svg");
         var shadedSvg = TerritoryRegionStructureSvgRenderer.Render(config, territory, shaded: true);
         File.WriteAllText(shadedDiagramPath, shadedSvg, Encoding.UTF8);
 
         var sectorDiagnosticPaths = new List<string>(territory.RegionSectors.Count);
         foreach (var regionSectors in territory.RegionSectors.OrderBy(item => item.Region.Index))
         {
-            var sectorPath = Path.Combine(outputDirectory, $"DIAG_{regionSectors.Region.Name}_SectorWireframe_VIEW.svg");
+            var sectorPath = Path.Combine(regionOutputDirectory, $"DIAG_{regionSectors.Region.Name}_SectorWireframe_VIEW.svg");
             var sectorSvg = TerritoryRegionStructureSvgRenderer.RenderRegionSectors(config, territory, regionSectors, networkSnapshot);
             File.WriteAllText(sectorPath, sectorSvg, Encoding.UTF8);
             sectorDiagnosticPaths.Add(sectorPath);
 
-            var sectorViewerPath = Path.Combine(outputDirectory, $"DIAG_{regionSectors.Region.Name}_Sector3D_VIEW.html");
+            var sectorViewerPath = Path.Combine(regionOutputDirectory, $"DIAG_{regionSectors.Region.Name}_Sector3D_VIEW.html");
             var sectorViewerHtml = RegionSectorStructureHtmlRenderer.Render(config, regionSectors, networkSnapshot);
             File.WriteAllText(sectorViewerPath, sectorViewerHtml, Encoding.UTF8);
 
             foreach (var sector in regionSectors.Sectors.OrderBy(item => item.Index))
             {
-                var navPath = Path.Combine(outputDirectory, $"NAV_{sector.Name}.svg");
+                var navPath = Path.Combine(sectorOutputDirectory, $"NAV_{sector.Name}.svg");
                 var navSvg = SectorNavigationMapSvgRenderer.Render(config, regionSectors, sector, networkSnapshot);
                 File.WriteAllText(navPath, navSvg, Encoding.UTF8);
 
-                var nav3dPath = Path.Combine(outputDirectory, $"NAV3D_{sector.Name}.html");
+                var nav3dPath = Path.Combine(sectorOutputDirectory, $"NAV3D_{sector.Name}.html");
                 var nav3dHtml = SectorNavigation3DHtmlRenderer.Render(config, regionSectors, sector, networkSnapshot);
                 File.WriteAllText(nav3dPath, nav3dHtml, Encoding.UTF8);
             }
         }
 
-        var heavyLinkDiagramPath = Path.Combine(outputDirectory, "DIAG_Territory_HeavyGateSystems_VIEW.svg");
+        var heavyLinkDiagramPath = Path.Combine(territoryOutputDirectory, "DIAG_Territory_HeavyGateSystems_VIEW.svg");
         var heavyLinkSvg = TerritoryRegionStructureSvgRenderer.RenderHeavyLinks(config, territory);
         File.WriteAllText(heavyLinkDiagramPath, heavyLinkSvg, Encoding.UTF8);
 
-        var regionLinkReportPath = Path.Combine(outputDirectory, "DIAG_REGION_LINKS.HTML");
+        var regionLinkReportPath = Path.Combine(territoryOutputDirectory, "DIAG_REGION_LINKS.HTML");
         var regionLinkReportHtml = TerritoryRegionLinkReportRenderer.Render(config, territory);
         File.WriteAllText(regionLinkReportPath, regionLinkReportHtml, Encoding.UTF8);
 
-        var solarSystemReportPath = Path.Combine(outputDirectory, "DIAG_SOLAR_SYSTEMS.HTML");
+        var solarSystemReportPath = Path.Combine(territoryOutputDirectory, "DIAG_SOLAR_SYSTEMS.HTML");
         var solarSystemReport = TerritorySolarSystemValidationReportRenderer.Build(config, territory);
         File.WriteAllText(solarSystemReportPath, solarSystemReport.Html, Encoding.UTF8);
 
-        foreach (var stalePathReport in Directory.EnumerateFiles(outputDirectory, "DIAG_PATHS_FROM_*.HTML"))
+        foreach (var stalePathReport in Directory.EnumerateFiles(territoryOutputDirectory, "DIAG_PATHS_FROM_*.HTML"))
         {
             File.Delete(stalePathReport);
         }
 
-        var pathValidationReportPath = Path.Combine(outputDirectory, solarSystemReport.PathReportFileName);
+        var pathValidationReportPath = Path.Combine(territoryOutputDirectory, solarSystemReport.PathReportFileName);
         File.WriteAllText(pathValidationReportPath, solarSystemReport.PathReportHtml, Encoding.UTF8);
 
-        var heavyGateViewerPath = Path.Combine(outputDirectory, "DIAG_Territory_HeavyGateSystems_3D_VIEW.html");
+        foreach (var systemMapArtifact in solarSystemReport.SystemMapArtifacts)
+        {
+            var systemMapPath = Path.Combine(sectorOutputDirectory, systemMapArtifact.FileName);
+            File.WriteAllText(systemMapPath, systemMapArtifact.Content, Encoding.UTF8);
+        }
+
+        var heavyGateViewerPath = Path.Combine(territoryOutputDirectory, "DIAG_Territory_HeavyGateSystems_3D_VIEW.html");
         var heavyGateViewerHtml = TerritoryHeavyGateNetworkHtmlRenderer.Render(config, territory);
         File.WriteAllText(heavyGateViewerPath, heavyGateViewerHtml, Encoding.UTF8);
 
-        var interactiveViewerPath = Path.Combine(outputDirectory, "DIAG_Territory_StarMap_3D_VIEW.html");
+        var interactiveViewerPath = Path.Combine(territoryOutputDirectory, "DIAG_Territory_StarMap_3D_VIEW.html");
         var interactiveViewerHtml = TerritoryStarMapHtmlRenderer.Render(config, territory, networkSnapshot);
         File.WriteAllText(interactiveViewerPath, interactiveViewerHtml, Encoding.UTF8);
 
-        var territoryGateMapPath = Path.Combine(outputDirectory, "DIAG_Territory_StarGateMap_3D_VIEW.html");
+        var territoryGateMapPath = Path.Combine(territoryOutputDirectory, "DIAG_Territory_StarGateMap_3D_VIEW.html");
         var territoryGateMapHtml = TerritoryStarGateMapHtmlRenderer.Render(config, territory, networkSnapshot);
         File.WriteAllText(territoryGateMapPath, territoryGateMapHtml, Encoding.UTF8);
 
@@ -163,6 +177,31 @@ sealed class TerritoryGenerator
             SolarSystemCount: solarSystemReport.SystemCount,
             Status: "generated",
             Message: $"Generated 16 seeded region cells, {territory.RegionSectors.Sum(item => item.Sectors.Count)} sector cells, {territory.HeavyGateLinks.Count} heavy-gate system pairs, and {solarSystemReport.SystemCount} solar systems for territory {config.TerritoryName}.");
+    }
+
+    private static void DeleteLegacyRootOutputFiles(string outputDirectory)
+    {
+        foreach (var filePath in Directory.EnumerateFiles(outputDirectory, "*", SearchOption.TopDirectoryOnly))
+        {
+            var fileName = Path.GetFileName(filePath);
+            if (fileName.StartsWith("DIAG_", StringComparison.OrdinalIgnoreCase) ||
+                fileName.StartsWith("NAV_", StringComparison.OrdinalIgnoreCase) ||
+                fileName.StartsWith("NAV3D_", StringComparison.OrdinalIgnoreCase))
+            {
+                File.Delete(filePath);
+            }
+        }
+    }
+
+    private static void DeleteStaleSystemMapArtifacts(string sectorOutputDirectory)
+    {
+        foreach (var pattern in new[] { "SYS2D_*.svg", "SYS3D_*.html" })
+        {
+            foreach (var filePath in Directory.EnumerateFiles(sectorOutputDirectory, pattern, SearchOption.TopDirectoryOnly))
+            {
+                File.Delete(filePath);
+            }
+        }
     }
 }
 
@@ -3728,7 +3767,7 @@ static class TerritorySolarSystemValidationReportRenderer
         var html = Render(config, territory, systems, routeAudit);
         var pathReportFileName = $"DIAG_PATHS_FROM_{SanitizeFileComponent(routeAudit.StartAddress)}.HTML";
         var pathReportHtml = RenderPathReport(config, systems, routeAudit);
-        return new SolarSystemReport(html, systems.Count, pathReportFileName, pathReportHtml);
+        return new SolarSystemReport(html, systems.Count, pathReportFileName, pathReportHtml, BuildSystemMapArtifacts(config, systems));
     }
 
     private static Dictionary<int, GeneratedSystemProfile> BuildSystemProfiles(GeneratorConfig config, IReadOnlyList<SolarSystemDraft> drafts)
@@ -3761,7 +3800,7 @@ static class TerritorySolarSystemValidationReportRenderer
         var contentsSummary = $"System with {draft.Gates.Count} gate(s): {draft.Gates.Count(gate => gate.GateType == "Heavy")} heavy, {draft.Gates.Count(gate => gate.GateType == "Medium")} medium, {draft.Gates.Count(gate => gate.GateType == "Light")} light. Generated profile: {planets.Count} planets, {totalMoons} moons, {ringedPlanets} ringed world(s), {giantCount} giant world(s), {habitableCount} habitable candidate(s).";
         var flavorText = BuildFlavorText(draft.SourceType, star, planets, habitableCount, ringedPlanets);
 
-        return new GeneratedSystemProfile(displayName, stellarSummary, contentsSummary, flavorText, planets);
+        return new GeneratedSystemProfile(displayName, star, stellarSummary, contentsSummary, flavorText, planets);
     }
 
     private static string BuildFlavorText(string sourceType, GeneratedStarProfile star, IReadOnlyList<GeneratedPlanetProfile> planets, int habitableCount, int ringedPlanets)
@@ -3879,11 +3918,11 @@ static class TerritorySolarSystemValidationReportRenderer
                 ? 4.0 + (random.NextDouble() * 8.0)
                 : 0.2 + (random.NextDouble() * 3.5);
             var planetType = DeterminePlanetType(random, semiMajorAxis, star, eccentricity);
-            var hasRings = planetType.Contains("Giant", StringComparison.Ordinal) ? random.NextDouble() < 0.42 : random.NextDouble() < 0.07;
             var moonCount = GenerateMoonCount(random, planetType);
+            var ringCount = GenerateRingCount(random, planetType);
             var orbitalPeriodYears = Math.Sqrt((semiMajorAxis * semiMajorAxis * semiMajorAxis) / Math.Max(0.08, star.MassSolar));
             var isHabitable = IsHabitableCandidate(planetType, semiMajorAxis, star, eccentricity);
-            planets.Add(new GeneratedPlanetProfile(string.Empty, planetType, semiMajorAxis, eccentricity, inclination, orbitalPeriodYears, moonCount, hasRings, isHabitable));
+            planets.Add(new GeneratedPlanetProfile(string.Empty, planetType, semiMajorAxis, eccentricity, inclination, orbitalPeriodYears, moonCount, ringCount, isHabitable));
         }
 
         return planets;
@@ -3969,6 +4008,22 @@ static class TerritorySolarSystemValidationReportRenderer
         }
 
         return random.NextDouble() < 0.55 ? 0 : random.Next(1, 3);
+    }
+
+    private static int GenerateRingCount(Random random, string planetType)
+    {
+        var isGiant = planetType.Contains("Giant", StringComparison.Ordinal);
+        var threshold = isGiant ? 0.42 : 0.07;
+        var roll = random.NextDouble();
+        if (roll >= threshold)
+        {
+            return 0;
+        }
+
+        var bandCount = isGiant ? 5 : 3;
+        var baseCount = isGiant ? 2 : 1;
+        var bandIndex = Math.Min(bandCount - 1, (int)((roll / threshold) * bandCount));
+        return baseCount + bandIndex;
     }
 
     private static bool IsHabitableCandidate(string planetType, double orbitalDistanceAu, GeneratedStarProfile star, double eccentricity)
@@ -4166,6 +4221,7 @@ static class TerritorySolarSystemValidationReportRenderer
                 draft.Position,
                 draft.SourceType,
                 draft.SourceDescription,
+                profile.Star,
                 profile.StellarSummary,
                 profile.ContentsSummary,
                 profile.FlavorText,
@@ -4888,7 +4944,7 @@ static class TerritorySolarSystemValidationReportRenderer
                     builder.AppendLine("          <tbody>");
                     foreach (var planet in system.Planets)
                     {
-                        builder.AppendLine($"            <tr><td>{Escape(planet.Name)}</td><td>{Escape(planet.PlanetType)}</td><td class=\"mono\">{planet.SemiMajorAxisAu:0.00} AU</td><td class=\"mono\">{planet.Eccentricity:0.000}</td><td class=\"mono\">{planet.InclinationDeg:0.0} deg</td><td class=\"mono\">{planet.OrbitalPeriodYears:0.00} yr</td><td>{planet.MoonCount}</td><td>{(planet.HasRings ? "Yes" : "No")}</td><td>{(planet.IsHabitable ? "Candidate" : "No")}</td></tr>");
+                        builder.AppendLine($"            <tr><td>{Escape(planet.Name)}</td><td>{Escape(planet.PlanetType)}</td><td class=\"mono\">{planet.SemiMajorAxisAu:0.00} AU</td><td class=\"mono\">{planet.Eccentricity:0.000}</td><td class=\"mono\">{planet.InclinationDeg:0.0} deg</td><td class=\"mono\">{planet.OrbitalPeriodYears:0.00} yr</td><td>{planet.MoonCount}</td><td>{planet.RingCount}</td><td>{(planet.IsHabitable ? "Candidate" : "No")}</td></tr>");
                     }
                     builder.AppendLine("          </tbody>");
                     builder.AppendLine("        </table>");
@@ -4983,6 +5039,752 @@ static class TerritorySolarSystemValidationReportRenderer
         builder.AppendLine("</body>");
         builder.AppendLine("</html>");
         return builder.ToString();
+    }
+
+    private static IEnumerable<GeneratedTextArtifact> BuildSystemMapArtifacts(GeneratorConfig config, IReadOnlyList<ReportedSolarSystem> systems)
+    {
+        foreach (var system in systems.OrderBy(system => system.Address))
+        {
+            var fileStem = BuildSystemMapArtifactStem(system);
+            yield return new GeneratedTextArtifact($"SYS2D_{fileStem}.svg", RenderSystemOrbitMapSvg(config, system));
+            yield return new GeneratedTextArtifact($"SYS3D_{fileStem}.html", RenderSystemOrbit3DHtml(config, system));
+        }
+    }
+
+    private static string BuildSystemMapArtifactStem(ReportedSolarSystem system)
+    {
+        return $"{SanitizeFileComponent(system.Address)}__{SanitizeFileComponent(system.Name)}";
+    }
+
+    private static string RenderSystemOrbitMapSvg(GeneratorConfig config, ReportedSolarSystem system)
+    {
+        const int width = 1400;
+        const int height = 980;
+        const double mapCenterX = 470.0;
+        const double mapCenterY = 560.0;
+        const double mapRadius = 350.0;
+        const double panelX = 930.0;
+
+        var maxOrbitAu = system.Planets.Count == 0
+            ? 1.0
+            : Math.Max(1.0, system.Planets.Max(planet => planet.SemiMajorAxisAu * (1.0 + planet.Eccentricity)));
+        var orbitScale = mapRadius / maxOrbitAu;
+        var starColor = GetStarColor(system.Star.Classification);
+        var starGlowColor = GetStarGlowColor(system.Star.Classification);
+        var starRadius = GetStarMarkerRadius(system.Star.Classification);
+        var (heavyCount, mediumCount, lightCount) = CountGateTypes(system);
+        var gatePlacements = BuildSystemGatePlacements(system);
+        var gateOrbitRadius = Math.Min(398.0, mapRadius + 42.0);
+
+        var builder = new StringBuilder();
+        builder.AppendLine("<?xml version='1.0' encoding='UTF-8'?>");
+        builder.AppendLine($"<svg xmlns='http://www.w3.org/2000/svg' width='{width}' height='{height}' viewBox='0 0 {width} {height}'>");
+        builder.AppendLine("  <rect width='100%' height='100%' fill='#04101a' />");
+        builder.AppendLine("  <rect x='24' y='24' width='1352' height='932' rx='24' fill='rgba(8,18,30,0.96)' stroke='#17304a' stroke-width='1.2' />");
+        builder.AppendLine($"  <text x='44' y='58' fill='#e6eef8' font-size='28' font-family='Consolas, monospace'>{Escape(system.Address)} | {Escape(system.Name)} ORBIT MAP</text>");
+        builder.AppendLine($"  <text x='44' y='86' fill='#88a3bf' font-size='15' font-family='Consolas, monospace'>{Escape(config.TerritoryName)} | {Escape(system.SourceType)} | Gates H/M/L {heavyCount}/{mediumCount}/{lightCount} | {system.Planets.Count} planets</text>");
+
+        var hzOuterRadius = system.Star.HabitableZoneOuterAu * orbitScale;
+        var hzInnerRadius = system.Star.HabitableZoneInnerAu * orbitScale;
+        if (hzOuterRadius > hzInnerRadius + 1.0)
+        {
+            builder.AppendLine($"  <circle cx='{mapCenterX:0.00}' cy='{mapCenterY:0.00}' r='{hzOuterRadius:0.00}' fill='#8fd694' fill-opacity='0.08' />");
+            builder.AppendLine($"  <circle cx='{mapCenterX:0.00}' cy='{mapCenterY:0.00}' r='{hzInnerRadius:0.00}' fill='#04101a' />");
+            builder.AppendLine($"  <circle cx='{mapCenterX:0.00}' cy='{mapCenterY:0.00}' r='{hzOuterRadius:0.00}' fill='none' stroke='#8fd694' stroke-opacity='0.24' stroke-width='1.0' />");
+        }
+
+        for (var ringIndex = 1; ringIndex <= 4; ringIndex++)
+        {
+            var ringRadius = mapRadius * ringIndex / 4.0;
+            var ringLabelAu = maxOrbitAu * ringIndex / 4.0;
+            builder.AppendLine($"  <circle cx='{mapCenterX:0.00}' cy='{mapCenterY:0.00}' r='{ringRadius:0.00}' fill='none' stroke='#17304a' stroke-width='1.0' stroke-dasharray='4 5' />");
+            builder.AppendLine($"  <text x='{mapCenterX + ringRadius + 10.0:0.00}' y='{mapCenterY - 6.0:0.00}' fill='#68819a' font-size='12' font-family='Consolas, monospace'>{ringLabelAu:0.0} AU</text>");
+        }
+
+        builder.AppendLine($"  <line x1='{mapCenterX - mapRadius:0.00}' y1='{mapCenterY:0.00}' x2='{mapCenterX + mapRadius:0.00}' y2='{mapCenterY:0.00}' stroke='#102537' stroke-width='1' />");
+        builder.AppendLine($"  <line x1='{mapCenterX:0.00}' y1='{mapCenterY - mapRadius:0.00}' x2='{mapCenterX:0.00}' y2='{mapCenterY + mapRadius:0.00}' stroke='#102537' stroke-width='1' />");
+
+        if (gatePlacements.Count > 0)
+        {
+            builder.AppendLine($"  <circle cx='{mapCenterX:0.00}' cy='{mapCenterY:0.00}' r='{gateOrbitRadius:0.00}' fill='none' stroke='#35566f' stroke-opacity='0.68' stroke-width='1.2' />");
+            builder.AppendLine($"  <text x='{mapCenterX + gateOrbitRadius + 10.0:0.00}' y='{mapCenterY + 18.0:0.00}' fill='#68819a' font-size='12' font-family='Consolas, monospace'>gate orbit</text>");
+
+            foreach (var placement in gatePlacements)
+            {
+                var gate = placement.Gate;
+                var gatePoint = new Point2(
+                    mapCenterX + (gateOrbitRadius * Math.Cos(placement.AngleRad)),
+                    mapCenterY - (gateOrbitRadius * Math.Sin(placement.AngleRad)));
+                var gateRadius = GetSystemGateMarkerRadius(gate.GateType);
+                var gateColor = GetSystemGateColor(gate.GateType);
+                var gateGlow = GetSystemGateGlowColor(gate.GateType);
+                var labelAnchor = Math.Cos(placement.AngleRad) >= 0.0 ? "start" : "end";
+                var labelX = gatePoint.X + (Math.Cos(placement.AngleRad) >= 0.0 ? gateRadius + 8.0 : -gateRadius - 8.0);
+                var labelY = gatePoint.Y + (Math.Sin(placement.AngleRad) >= 0.0 ? 12.0 : -10.0);
+
+                builder.AppendLine($"  <circle cx='{gatePoint.X:0.00}' cy='{gatePoint.Y:0.00}' r='{gateRadius * 2.0:0.00}' fill='{gateGlow}' />");
+                builder.AppendLine($"  <rect x='{gatePoint.X - gateRadius:0.00}' y='{gatePoint.Y - gateRadius:0.00}' width='{gateRadius * 2.0:0.00}' height='{gateRadius * 2.0:0.00}' rx='{Math.Max(3.0, gateRadius * 0.45):0.00}' fill='#0e1824' stroke='{gateColor}' stroke-width='1.15' />");
+                builder.AppendLine($"  <text x='{gatePoint.X:0.00}' y='{gatePoint.Y + 3.20:0.00}' fill='#eef5fd' font-size='10' text-anchor='middle' font-family='Consolas, monospace'>{GetSystemGateAbbreviation(gate.GateType)}</text>");
+                builder.AppendLine($"  <text x='{labelX:0.00}' y='{labelY:0.00}' fill='#dbe8f4' font-size='10' text-anchor='{labelAnchor}' font-family='Consolas, monospace'>{Escape(gate.TargetAddress)}</text>");
+            }
+        }
+
+        foreach (var planet in system.Planets)
+        {
+            var orbitRotation = GetDeterministicAngleRadians($"{system.Address}|{planet.Name}|orbit");
+            var phase = GetDeterministicAngleRadians($"{system.Address}|{planet.Name}|phase");
+            var orbitPath = BuildSystemOrbitPathData(mapCenterX, mapCenterY, orbitScale, planet, orbitRotation, 96);
+            var planetPointAu = ComputeOrbitPoint2D(planet.SemiMajorAxisAu, planet.Eccentricity, orbitRotation, phase);
+            var planetPoint = new Point2(mapCenterX + (planetPointAu.X * orbitScale), mapCenterY - (planetPointAu.Y * orbitScale));
+            var planetColor = GetPlanetColor(planet.PlanetType, planet.IsHabitable);
+            var planetGlow = GetPlanetGlowColor(planet.PlanetType, planet.IsHabitable);
+            var planetStroke = GetPlanetStrokeColor(planet.PlanetType, planet.IsHabitable);
+            var planetRadius = GetPlanetMarkerRadius(planet.PlanetType);
+            var shortLabel = GetPlanetShortLabel(system, planet);
+
+            builder.AppendLine($"  <path d='{orbitPath}' fill='none' stroke='{GetPlanetOrbitStroke(planet.PlanetType, planet.IsHabitable)}' stroke-opacity='0.52' stroke-width='{(planet.HasRings ? 1.35 : 1.15):0.00}' />");
+            if (planet.HasRings)
+            {
+                builder.AppendLine($"  <ellipse cx='{planetPoint.X:0.00}' cy='{planetPoint.Y:0.00}' rx='{planetRadius * 1.9:0.00}' ry='{planetRadius * 0.72:0.00}' fill='none' stroke='#f4f1de' stroke-opacity='0.68' stroke-width='0.9' transform='rotate(22 {planetPoint.X:0.00} {planetPoint.Y:0.00})' />");
+            }
+
+            builder.AppendLine($"  <circle cx='{planetPoint.X:0.00}' cy='{planetPoint.Y:0.00}' r='{planetRadius * 2.1:0.00}' fill='{planetGlow}' />");
+            builder.AppendLine($"  <circle cx='{planetPoint.X:0.00}' cy='{planetPoint.Y:0.00}' r='{planetRadius:0.00}' fill='{planetColor}' stroke='{planetStroke}' stroke-width='1.0' />");
+            builder.AppendLine($"  <text x='{planetPoint.X + planetRadius + 6.0:0.00}' y='{planetPoint.Y - planetRadius - 4.0:0.00}' fill='#eef5fd' font-size='11' font-family='Consolas, monospace'>{Escape(shortLabel)}</text>");
+        }
+
+        builder.AppendLine($"  <circle cx='{mapCenterX:0.00}' cy='{mapCenterY:0.00}' r='{starRadius * 2.8:0.00}' fill='{starGlowColor}' />");
+        builder.AppendLine($"  <circle cx='{mapCenterX:0.00}' cy='{mapCenterY:0.00}' r='{starRadius:0.00}' fill='{starColor}' stroke='#fff6d5' stroke-width='1.3' />");
+        builder.AppendLine($"  <text x='{mapCenterX + 14.0:0.00}' y='{mapCenterY - 14.0:0.00}' fill='#fff4d6' font-size='12' font-family='Consolas, monospace'>{Escape(system.Star.StarName)}</text>");
+
+        builder.AppendLine($"  <text x='{panelX:0.00}' y='128' fill='#9ed8ff' font-size='18' font-family='Consolas, monospace'>Primary Star</text>");
+        builder.AppendLine($"  <text x='{panelX:0.00}' y='156' fill='#dbe8f4' font-size='14' font-family='Consolas, monospace'>{Escape(system.Star.Classification)} | {system.Star.MassSolar:0.00} Msol | {system.Star.TemperatureK:0} K</text>");
+        builder.AppendLine($"  <text x='{panelX:0.00}' y='182' fill='#88a3bf' font-size='13' font-family='Consolas, monospace'>Habitable zone {system.Star.HabitableZoneInnerAu:0.00}-{system.Star.HabitableZoneOuterAu:0.00} AU</text>");
+        builder.AppendLine($"  <text x='{panelX:0.00}' y='208' fill='#88a3bf' font-size='13' font-family='Consolas, monospace'>Position ({system.Position.X:0.00}, {system.Position.Y:0.00}, {system.Position.Z:0.00})</text>");
+        builder.AppendLine($"  <text x='{panelX:0.00}' y='250' fill='#9ed8ff' font-size='18' font-family='Consolas, monospace'>Planets</text>");
+
+        var rowY = 278.0;
+        foreach (var planet in system.Planets)
+        {
+            builder.AppendLine($"  <text x='{panelX:0.00}' y='{rowY:0.00}' fill='#dbe8f4' font-size='12' font-family='Consolas, monospace'>{Escape(BuildPlanetSummaryLine(system, planet))}</text>");
+            rowY += 22.0;
+        }
+
+        rowY += 12.0;
+        builder.AppendLine($"  <text x='{panelX:0.00}' y='{rowY:0.00}' fill='#9ed8ff' font-size='18' font-family='Consolas, monospace'>Star Gates</text>");
+        rowY += 28.0;
+        if (system.Gates.Count == 0)
+        {
+            builder.AppendLine($"  <text x='{panelX:0.00}' y='{rowY:0.00}' fill='#88a3bf' font-size='12' font-family='Consolas, monospace'>No star gates</text>");
+        }
+        else
+        {
+            foreach (var gate in gatePlacements.Select(item => item.Gate))
+            {
+                builder.AppendLine($"  <text x='{panelX:0.00}' y='{rowY:0.00}' fill='#dbe8f4' font-size='12' font-family='Consolas, monospace'>{Escape(BuildGateSummaryLine(gate))}</text>");
+                rowY += 20.0;
+            }
+        }
+
+        builder.AppendLine($"  <text x='44' y='938' fill='#68819a' font-size='12' font-family='Consolas, monospace'>Address {Escape(system.Address)} | Friendly name {Escape(system.Name)} | Planetary orbits use linear AU scale; star gates share a rendered outer orbit.</text>");
+        builder.AppendLine("</svg>");
+        return builder.ToString();
+    }
+
+    private static string RenderSystemOrbit3DHtml(GeneratorConfig config, ReportedSolarSystem system)
+    {
+        var maxOrbitAu = system.Planets.Count == 0
+            ? 1.0
+            : Math.Max(1.0, system.Planets.Max(planet => planet.SemiMajorAxisAu * (1.0 + planet.Eccentricity)));
+        var gateOrbitRadius = Math.Max(1.6, maxOrbitAu * 1.18);
+        var sceneExtent = Math.Max(2.0, gateOrbitRadius * 1.35);
+        var starColor = GetStarColor(system.Star.Classification);
+        var starGlowColor = GetStarGlowColor(system.Star.Classification);
+        var starRadius = GetStarMarkerRadius(system.Star.Classification);
+        var planetsJson = BuildSystemOrbit3DJson(system);
+        var gatesJson = BuildSystemGate3DJson(system, gateOrbitRadius);
+        var (heavyCount, mediumCount, lightCount) = CountGateTypes(system);
+        var gatePlacements = BuildSystemGatePlacements(system);
+
+        var builder = new StringBuilder();
+        builder.AppendLine("<!DOCTYPE html>");
+        builder.AppendLine("<html lang='en'>");
+        builder.AppendLine("<head>");
+        builder.AppendLine("  <meta charset='UTF-8' />");
+        builder.AppendLine("  <meta name='viewport' content='width=device-width, initial-scale=1.0' />");
+        builder.AppendLine($"  <title>{Escape(config.TerritoryName)} {Escape(system.Address)} {Escape(system.Name)} System 3D</title>");
+        builder.AppendLine("  <style>");
+        builder.AppendLine("    :root { color-scheme: dark; }");
+        builder.AppendLine("    body { margin: 0; background: radial-gradient(circle at top, #0b1626, #04070d 65%); color: #e7eef7; font-family: Consolas, 'Courier New', monospace; }");
+        builder.AppendLine("    .shell { padding: 24px 28px 18px; }");
+        builder.AppendLine("    h1 { margin: 0 0 8px; font-size: 28px; font-weight: 500; }");
+        builder.AppendLine("    .meta { color: #8fa6be; font-size: 14px; margin-bottom: 10px; }");
+        builder.AppendLine("    .subtle { color: #9db4ca; font-size: 13px; margin-bottom: 14px; }");
+        builder.AppendLine("    .hint { color: #9db4ca; font-size: 13px; margin-bottom: 14px; }");
+        builder.AppendLine("    .summary-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 12px; margin-bottom: 14px; }");
+        builder.AppendLine("    .summary-card { background: rgba(10,20,34,0.82); border: 1px solid #22384d; border-radius: 14px; padding: 12px 14px; }");
+        builder.AppendLine("    .summary-title { color: #9ed8ff; font-size: 14px; margin-bottom: 8px; }");
+        builder.AppendLine("    .summary-row { color: #dbe8f4; font-size: 12px; margin: 4px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }");
+        builder.AppendLine("    canvas { width: min(1200px, calc(100vw - 56px)); height: min(840px, calc(100vh - 176px)); border: 1px solid #22384d; border-radius: 18px; background: linear-gradient(180deg, rgba(10,20,34,0.92), rgba(3,7,12,0.96)); display: block; box-shadow: 0 18px 48px rgba(0,0,0,0.32); cursor: grab; }");
+        builder.AppendLine("    canvas.dragging { cursor: grabbing; }");
+        builder.AppendLine("  </style>");
+        builder.AppendLine("</head>");
+        builder.AppendLine("<body>");
+        builder.AppendLine("  <div class='shell' id='viewer-shell'>");
+        builder.AppendLine($"    <h1>{Escape(system.Address)} | {Escape(system.Name)} System 3D</h1>");
+        builder.AppendLine($"    <div class='meta'>{Escape(config.TerritoryName)} | {Escape(system.SourceType)} | Gates H/M/L {heavyCount}/{mediumCount}/{lightCount} | {system.Planets.Count} planets</div>");
+        builder.AppendLine($"    <div class='subtle'>{Escape(system.StellarSummary)}</div>");
+        builder.AppendLine("    <div class='hint'>Left-drag to rotate. Right-drag or Shift-drag to pan. W/S dolly in and out. Scroll to zoom. Double-click to reset the view.</div>");
+        builder.AppendLine("    <div class='summary-grid'>");
+        builder.AppendLine("      <div class='summary-card'>");
+        builder.AppendLine("        <div class='summary-title'>Planets</div>");
+        foreach (var planet in system.Planets)
+        {
+            builder.AppendLine($"        <div class='summary-row'>{Escape(BuildPlanetSummaryLine(system, planet))}</div>");
+        }
+        builder.AppendLine("      </div>");
+        builder.AppendLine("      <div class='summary-card'>");
+        builder.AppendLine("        <div class='summary-title'>Star Gates</div>");
+        if (system.Gates.Count == 0)
+        {
+            builder.AppendLine("        <div class='summary-row'>No star gates</div>");
+        }
+        else
+        {
+            foreach (var gate in gatePlacements.Select(item => item.Gate))
+            {
+                builder.AppendLine($"        <div class='summary-row'>{Escape(BuildGateSummaryLine(gate))}</div>");
+            }
+        }
+        builder.AppendLine("      </div>");
+        builder.AppendLine("    </div>");
+        builder.AppendLine("    <div class='subtle'>Star gates share a rendered outer orbit in the same plane as the rest of the system.</div>");
+        builder.AppendLine("    <canvas id='view' width='1200' height='840'></canvas>");
+        builder.AppendLine("  </div>");
+        builder.AppendLine("  <script>");
+        builder.AppendLine($"    const planets = {planetsJson};");
+        builder.AppendLine($"    const gates = {gatesJson};");
+        builder.AppendLine($"    const gateOrbitRadius = {gateOrbitRadius:0.###};");
+        builder.AppendLine($"    const sceneExtent = {sceneExtent:0.###};");
+        builder.AppendLine($"    const star = {{ color: '{starColor}', glow: '{starGlowColor}', radius: {starRadius:0.0} }};");
+        builder.AppendLine("    const shell = document.getElementById('viewer-shell');");
+        builder.AppendLine("    const canvas = document.getElementById('view');");
+        builder.AppendLine("    const ctx = canvas.getContext('2d');");
+        builder.AppendLine("    const orbitSteps = 72;");
+        builder.AppendLine("    let yaw = -0.72;");
+        builder.AppendLine("    let pitch = 0.48;");
+        builder.AppendLine("    let zoom = 4.4;");
+        builder.AppendLine("    let panX = 0;");
+        builder.AppendLine("    let panY = 0;");
+        builder.AppendLine("    let dolly = 0;");
+        builder.AppendLine("    let dragging = false;");
+        builder.AppendLine("    let dragMode = 'rotate';");
+        builder.AppendLine("    let zoomTargetActive = false;");
+        builder.AppendLine("    let lastX = 0;");
+        builder.AppendLine("    let lastY = 0;");
+        builder.AppendLine("    const baseScale = Math.max(5.0, 430 / Math.max(2.0, sceneExtent));");
+        builder.AppendLine("    const distanceBase = Math.max(32.0, sceneExtent * 3.2);");
+        builder.AppendLine("    function resetView() { yaw = -0.72; pitch = 0.48; zoom = 4.4; panX = 0; panY = 0; dolly = 0; render(); }");
+        builder.AppendLine("    function applyZoom(deltaY) { const factor = Math.exp(deltaY * 0.0030); zoom = Math.max(0.40, Math.min(24.0, zoom * factor)); render(); }");
+        builder.AppendLine("    function rotateView(point) {");
+        builder.AppendLine("      const cy = Math.cos(yaw), sy = Math.sin(yaw);");
+        builder.AppendLine("      const cp = Math.cos(pitch), sp = Math.sin(pitch);");
+        builder.AppendLine("      const x1 = (point.x * cy) - (point.z * sy);");
+        builder.AppendLine("      const z1 = (point.x * sy) + (point.z * cy);");
+        builder.AppendLine("      const y2 = (point.y * cp) - (z1 * sp);");
+        builder.AppendLine("      const z2 = (point.y * sp) + (z1 * cp);");
+        builder.AppendLine("      return { x: x1, y: y2, z: z2 };");
+        builder.AppendLine("    }");
+        builder.AppendLine("    function rotateX(point, angle) { const cos = Math.cos(angle); const sin = Math.sin(angle); return { x: point.x, y: (point.y * cos) - (point.z * sin), z: (point.y * sin) + (point.z * cos) }; }");
+        builder.AppendLine("    function rotateZ(point, angle) { const cos = Math.cos(angle); const sin = Math.sin(angle); return { x: (point.x * cos) - (point.y * sin), y: (point.x * sin) + (point.y * cos), z: point.z }; }");
+        builder.AppendLine("    function orbitalPoint(planet, angle) {");
+        builder.AppendLine("      const x = (planet.orbitRx * Math.cos(angle)) - planet.focusOffset;");
+        builder.AppendLine("      const y = planet.orbitRy * Math.sin(angle);");
+        builder.AppendLine("      let point = { x, y, z: 0 };");
+        builder.AppendLine("      point = rotateX(point, planet.inclinationRad);");
+        builder.AppendLine("      point = rotateZ(point, planet.orbitRotationRad);");
+        builder.AppendLine("      return point;");
+        builder.AppendLine("    }");
+        builder.AppendLine("    function project(point) {");
+        builder.AppendLine("      const distance = distanceBase + (18 * zoom);");
+        builder.AppendLine("      const shiftedZ = Math.min(point.z + dolly, distance - 2.0);");
+        builder.AppendLine("      const perspective = distance / (distance - shiftedZ);");
+        builder.AppendLine("      return { x: canvas.width / 2 + panX + (point.x * perspective * baseScale), y: canvas.height / 2 + panY + (point.y * perspective * baseScale), scale: perspective, z: shiftedZ };");
+        builder.AppendLine("    }");
+        builder.AppendLine("    function drawOrbit(planet) {");
+        builder.AppendLine("      ctx.strokeStyle = planet.orbitStroke;");
+        builder.AppendLine("      ctx.lineWidth = planet.orbitWidth;");
+        builder.AppendLine("      ctx.beginPath();");
+        builder.AppendLine("      for (let step = 0; step <= orbitSteps; step++) {");
+        builder.AppendLine("        const sample = orbitalPoint(planet, (Math.PI * 2 * step) / orbitSteps);");
+        builder.AppendLine("        const projected = project(rotateView(sample));");
+        builder.AppendLine("        if (step === 0) { ctx.moveTo(projected.x, projected.y); } else { ctx.lineTo(projected.x, projected.y); }");
+        builder.AppendLine("      }");
+        builder.AppendLine("      ctx.stroke();");
+        builder.AppendLine("    }");
+        builder.AppendLine("    function drawStar() {");
+        builder.AppendLine("      const projected = project(rotateView({ x: 0, y: 0, z: 0 }));");
+        builder.AppendLine("      const radius = Math.max(star.radius, projected.scale * star.radius);");
+        builder.AppendLine("      ctx.fillStyle = star.glow;");
+        builder.AppendLine("      ctx.beginPath();");
+        builder.AppendLine("      ctx.arc(projected.x, projected.y, radius * 2.6, 0, Math.PI * 2);");
+        builder.AppendLine("      ctx.fill();");
+        builder.AppendLine("      ctx.fillStyle = star.color;");
+        builder.AppendLine("      ctx.strokeStyle = 'rgba(255, 246, 213, 0.95)';");
+        builder.AppendLine("      ctx.lineWidth = 1.4;");
+        builder.AppendLine("      ctx.beginPath();");
+        builder.AppendLine("      ctx.arc(projected.x, projected.y, radius, 0, Math.PI * 2);");
+        builder.AppendLine("      ctx.fill();");
+        builder.AppendLine("      ctx.stroke();");
+        builder.AppendLine("    }");
+        builder.AppendLine("    function drawCircularOrbit(radius, strokeStyle, lineWidth) {");
+        builder.AppendLine("      ctx.strokeStyle = strokeStyle;");
+        builder.AppendLine("      ctx.lineWidth = lineWidth;");
+        builder.AppendLine("      ctx.beginPath();");
+        builder.AppendLine("      for (let step = 0; step <= orbitSteps; step++) {");
+        builder.AppendLine("        const angle = (Math.PI * 2 * step) / orbitSteps;");
+        builder.AppendLine("        const sample = { x: radius * Math.cos(angle), y: radius * Math.sin(angle), z: 0 };");
+        builder.AppendLine("        const projected = project(rotateView(sample));");
+        builder.AppendLine("        if (step === 0) { ctx.moveTo(projected.x, projected.y); } else { ctx.lineTo(projected.x, projected.y); }");
+        builder.AppendLine("      }");
+        builder.AppendLine("      ctx.stroke();");
+        builder.AppendLine("    }");
+        builder.AppendLine("    function drawGate(entry) {");
+        builder.AppendLine("      const radius = Math.max(entry.gate.radius, entry.projected.scale * entry.gate.radius);");
+        builder.AppendLine("      ctx.fillStyle = entry.gate.glow;");
+        builder.AppendLine("      ctx.beginPath();");
+        builder.AppendLine("      ctx.arc(entry.projected.x, entry.projected.y, radius * 2.0, 0, Math.PI * 2);");
+        builder.AppendLine("      ctx.fill();");
+        builder.AppendLine("      ctx.fillStyle = entry.gate.fill;");
+        builder.AppendLine("      ctx.strokeStyle = entry.gate.stroke;");
+        builder.AppendLine("      ctx.lineWidth = 1.2;");
+        builder.AppendLine("      ctx.beginPath();");
+        builder.AppendLine("      ctx.rect(entry.projected.x - radius, entry.projected.y - radius, radius * 2.0, radius * 2.0);");
+        builder.AppendLine("      ctx.fill();");
+        builder.AppendLine("      ctx.stroke();");
+        builder.AppendLine("      ctx.fillStyle = '#eef5fd';");
+        builder.AppendLine("      ctx.font = '10px Consolas';");
+        builder.AppendLine("      ctx.fillText(entry.gate.symbol, entry.projected.x - 3, entry.projected.y + 3);");
+        builder.AppendLine("      ctx.font = '11px Consolas';");
+        builder.AppendLine("      ctx.fillText(entry.gate.label, entry.projected.x + radius + 8, entry.projected.y + 10);");
+        builder.AppendLine("    }");
+        builder.AppendLine("    function drawPlanet(entry) {");
+        builder.AppendLine("      const radius = Math.max(entry.planet.radius, entry.projected.scale * entry.planet.radius);");
+        builder.AppendLine("      ctx.fillStyle = entry.planet.glow;");
+        builder.AppendLine("      ctx.beginPath();");
+        builder.AppendLine("      ctx.arc(entry.projected.x, entry.projected.y, radius * 2.1, 0, Math.PI * 2);");
+        builder.AppendLine("      ctx.fill();");
+        builder.AppendLine("      if (entry.planet.hasRings) {");
+        builder.AppendLine("        ctx.strokeStyle = 'rgba(244, 241, 222, 0.72)';");
+        builder.AppendLine("        ctx.lineWidth = 1.0;");
+        builder.AppendLine("        ctx.beginPath();");
+        builder.AppendLine("        ctx.ellipse(entry.projected.x, entry.projected.y, radius * 1.9, radius * 0.72, 0.35, 0, Math.PI * 2);");
+        builder.AppendLine("        ctx.stroke();");
+        builder.AppendLine("      }");
+        builder.AppendLine("      ctx.fillStyle = entry.planet.fill;");
+        builder.AppendLine("      ctx.strokeStyle = entry.planet.stroke;");
+        builder.AppendLine("      ctx.lineWidth = entry.planet.isHabitable ? 1.6 : 1.1;");
+        builder.AppendLine("      ctx.beginPath();");
+        builder.AppendLine("      ctx.arc(entry.projected.x, entry.projected.y, radius, 0, Math.PI * 2);");
+        builder.AppendLine("      ctx.fill();");
+        builder.AppendLine("      ctx.stroke();");
+        builder.AppendLine("      ctx.fillStyle = '#eef5fd';");
+        builder.AppendLine("      ctx.font = '11px Consolas';");
+        builder.AppendLine("      ctx.fillText(entry.planet.shortLabel, entry.projected.x + 8, entry.projected.y - 6);");
+        builder.AppendLine("    }");
+        builder.AppendLine("    function render() {");
+        builder.AppendLine("      ctx.clearRect(0, 0, canvas.width, canvas.height);");
+        builder.AppendLine("      ctx.fillStyle = '#06111d';");
+        builder.AppendLine("      ctx.fillRect(0, 0, canvas.width, canvas.height);");
+        builder.AppendLine("      for (const planet of planets) { drawOrbit(planet); }");
+        builder.AppendLine("      if (gates.length > 0) { drawCircularOrbit(gateOrbitRadius, 'rgba(94, 128, 154, 0.72)', 1.25); }");
+        builder.AppendLine("      const projectedGates = gates.map(gate => { const rotated = rotateView(gate.position); return { gate, projected: project(rotated), depth: rotated.z }; }).sort((left, right) => left.depth - right.depth);");
+        builder.AppendLine("      drawStar();");
+        builder.AppendLine("      const bodies = planets.map(planet => { const orbit = orbitalPoint(planet, planet.phase); const rotated = rotateView(orbit); return { planet, projected: project(rotated), depth: rotated.z }; }).sort((left, right) => left.depth - right.depth);");
+        builder.AppendLine("      for (const body of bodies) { drawPlanet(body); }");
+        builder.AppendLine("      for (const gate of projectedGates) { drawGate(gate); }");
+        builder.AppendLine("    }");
+        builder.AppendLine("    canvas.addEventListener('contextmenu', event => event.preventDefault());");
+        builder.AppendLine("    canvas.addEventListener('pointerdown', event => { dragging = true; dragMode = (event.button === 2 || event.shiftKey) ? 'pan' : 'rotate'; lastX = event.clientX; lastY = event.clientY; canvas.classList.add('dragging'); });");
+        builder.AppendLine("    shell.addEventListener('pointerenter', () => { zoomTargetActive = true; });");
+        builder.AppendLine("    shell.addEventListener('pointerleave', () => { zoomTargetActive = false; });");
+        builder.AppendLine("    window.addEventListener('pointerup', () => { dragging = false; canvas.classList.remove('dragging'); });");
+        builder.AppendLine("    window.addEventListener('pointermove', event => {");
+        builder.AppendLine("      if (!dragging) return;");
+        builder.AppendLine("      const dx = event.clientX - lastX;");
+        builder.AppendLine("      const dy = event.clientY - lastY;");
+        builder.AppendLine("      lastX = event.clientX;");
+        builder.AppendLine("      lastY = event.clientY;");
+        builder.AppendLine("      if (dragMode === 'pan') { panX += dx; panY += dy; } else { yaw += dx * 0.008; pitch = Math.max(-1.35, Math.min(1.35, pitch + dy * 0.008)); }");
+        builder.AppendLine("      render();");
+        builder.AppendLine("    });");
+        builder.AppendLine("    shell.addEventListener('wheel', event => { event.preventDefault(); applyZoom(event.deltaY); }, { passive: false });");
+        builder.AppendLine("    window.addEventListener('wheel', event => { if (!zoomTargetActive) return; event.preventDefault(); applyZoom(event.deltaY); }, { passive: false });");
+        builder.AppendLine("    window.addEventListener('keydown', event => { if (!zoomTargetActive) return; const moveStep = Math.max(0.8, sceneExtent * 0.10); if (event.key === 'w' || event.key === 'W') { dolly += moveStep; } else if (event.key === 's' || event.key === 'S') { dolly -= moveStep; } else { return; } event.preventDefault(); render(); });");
+        builder.AppendLine("    canvas.addEventListener('dblclick', () => resetView());");
+        builder.AppendLine("    render();");
+        builder.AppendLine("  </script>");
+        builder.AppendLine("</body>");
+        builder.AppendLine("</html>");
+        return builder.ToString();
+    }
+
+    private static string BuildSystemOrbit3DJson(ReportedSolarSystem system)
+    {
+        var builder = new StringBuilder();
+        builder.Append('[');
+        for (var index = 0; index < system.Planets.Count; index++)
+        {
+            var planet = system.Planets[index];
+            if (index > 0)
+            {
+                builder.Append(',');
+            }
+
+            var orbitRotation = GetDeterministicAngleRadians($"{system.Address}|{planet.Name}|orbit");
+            var phase = GetDeterministicAngleRadians($"{system.Address}|{planet.Name}|phase");
+            var orbitRy = planet.SemiMajorAxisAu * Math.Sqrt(Math.Max(0.0, 1.0 - (planet.Eccentricity * planet.Eccentricity)));
+            builder.Append($"{{\"name\":\"{Escape(planet.Name)}\",\"shortLabel\":\"{Escape(GetPlanetShortLabel(system, planet))}\",\"orbitRx\":{planet.SemiMajorAxisAu:0.###},\"orbitRy\":{orbitRy:0.###},\"focusOffset\":{(planet.SemiMajorAxisAu * planet.Eccentricity):0.###},\"phase\":{phase:0.######},\"orbitRotationRad\":{orbitRotation:0.######},\"inclinationRad\":{((planet.InclinationDeg * Math.PI) / 180.0):0.######},\"radius\":{GetPlanetMarkerRadius(planet.PlanetType):0.0},\"fill\":\"{GetPlanetColor(planet.PlanetType, planet.IsHabitable)}\",\"stroke\":\"{GetPlanetStrokeColor(planet.PlanetType, planet.IsHabitable)}\",\"glow\":\"{GetPlanetGlowColor(planet.PlanetType, planet.IsHabitable)}\",\"orbitStroke\":\"{GetPlanetOrbitStroke(planet.PlanetType, planet.IsHabitable)}\",\"orbitWidth\":{(planet.HasRings ? 1.35 : 1.10):0.00},\"hasRings\":{planet.HasRings.ToString().ToLowerInvariant()},\"isHabitable\":{planet.IsHabitable.ToString().ToLowerInvariant()}}}");
+        }
+
+        builder.Append(']');
+        return builder.ToString();
+    }
+
+    private static string BuildSystemGate3DJson(ReportedSolarSystem system, double gateOrbitRadius)
+    {
+        var gatePlacements = BuildSystemGatePlacements(system);
+        var builder = new StringBuilder();
+        builder.Append('[');
+        for (var index = 0; index < gatePlacements.Count; index++)
+        {
+            if (index > 0)
+            {
+                builder.Append(',');
+            }
+
+            var placement = gatePlacements[index];
+            var gate = placement.Gate;
+            var position = new Point3(
+                gateOrbitRadius * Math.Cos(placement.AngleRad),
+                gateOrbitRadius * Math.Sin(placement.AngleRad),
+                0.0);
+            var gateColor = GetSystemGateColor(gate.GateType);
+            var gateRadius = GetSystemGateMarkerRadius(gate.GateType);
+            builder.Append($"{{\"position\":{{\"x\":{position.X:0.###},\"y\":{position.Y:0.###},\"z\":{position.Z:0.###}}},\"label\":\"{Escape(gate.TargetAddress)}\",\"symbol\":\"{GetSystemGateAbbreviation(gate.GateType)}\",\"fill\":\"rgba(14, 24, 36, 0.96)\",\"stroke\":\"{gateColor}\",\"glow\":\"{GetSystemGateGlowColor(gate.GateType)}\",\"radius\":{gateRadius:0.0},\"lineWidth\":{GetSystemGateLineWidth(gate.GateType):0.0}}}");
+        }
+
+        builder.Append(']');
+        return builder.ToString();
+    }
+
+    private static string BuildSystemOrbitPathData(double centerX, double centerY, double orbitScale, GeneratedPlanetProfile planet, double orbitRotation, int sampleCount)
+    {
+        var builder = new StringBuilder();
+        for (var index = 0; index <= sampleCount; index++)
+        {
+            var angle = (Math.PI * 2.0 * index) / sampleCount;
+            var orbitPoint = ComputeOrbitPoint2D(planet.SemiMajorAxisAu, planet.Eccentricity, orbitRotation, angle);
+            var x = centerX + (orbitPoint.X * orbitScale);
+            var y = centerY - (orbitPoint.Y * orbitScale);
+            builder.Append(index == 0 ? $"M {x:0.00} {y:0.00}" : $" L {x:0.00} {y:0.00}");
+        }
+
+        return builder.ToString();
+    }
+
+    private static Point2 ComputeOrbitPoint2D(double semiMajorAxisAu, double eccentricity, double orbitRotation, double angle)
+    {
+        var semiMinorAxisAu = semiMajorAxisAu * Math.Sqrt(Math.Max(0.0, 1.0 - (eccentricity * eccentricity)));
+        var x = (semiMajorAxisAu * Math.Cos(angle)) - (semiMajorAxisAu * eccentricity);
+        var y = semiMinorAxisAu * Math.Sin(angle);
+        return RotatePoint2D(new Point2(x, y), orbitRotation);
+    }
+
+    private static Point2 RotatePoint2D(Point2 point, double angle)
+    {
+        var cos = Math.Cos(angle);
+        var sin = Math.Sin(angle);
+        return new Point2((point.X * cos) - (point.Y * sin), (point.X * sin) + (point.Y * cos));
+    }
+
+    private static (int Heavy, int Medium, int Light) CountGateTypes(ReportedSolarSystem system)
+    {
+        return (
+            system.Gates.Count(gate => gate.GateType == "Heavy"),
+            system.Gates.Count(gate => gate.GateType == "Medium"),
+            system.Gates.Count(gate => gate.GateType == "Light"));
+    }
+
+    private static List<SystemGatePlacement> BuildSystemGatePlacements(ReportedSolarSystem system)
+    {
+        var orderedGates = system.Gates
+            .OrderBy(gate => GetSystemGateSortOrder(gate.GateType))
+            .ThenBy(gate => gate.TargetAddress)
+            .ToList();
+        var placements = new List<SystemGatePlacement>(orderedGates.Count);
+        if (orderedGates.Count == 0)
+        {
+            return placements;
+        }
+
+        var baseAngle = GetDeterministicAngleRadians($"{system.Address}|gates");
+        for (var index = 0; index < orderedGates.Count; index++)
+        {
+            var angle = baseAngle + ((Math.PI * 2.0 * index) / orderedGates.Count);
+            placements.Add(new SystemGatePlacement(orderedGates[index], angle));
+        }
+
+        return placements;
+    }
+
+    private static string BuildPlanetSummaryLine(ReportedSolarSystem system, GeneratedPlanetProfile planet)
+    {
+        return $"{GetPlanetShortLabel(system, planet)} | {planet.SemiMajorAxisAu:0.00} AU | {planet.PlanetType} | {planet.MoonCount} moon(s) | {planet.RingCount} ring(s)";
+    }
+
+    private static string BuildGateSummaryLine(SolarSystemGateSummary gate)
+    {
+        return $"{gate.GateType} -> {gate.TargetAddress} | {gate.DistanceLy:0.00} ly";
+    }
+
+    private static int GetSystemGateSortOrder(string gateType)
+    {
+        return gateType switch
+        {
+            "Heavy" => 0,
+            "Medium" => 1,
+            _ => 2
+        };
+    }
+
+    private static string GetSystemGateAbbreviation(string gateType)
+    {
+        return gateType switch
+        {
+            "Heavy" => "H",
+            "Medium" => "M",
+            _ => "L"
+        };
+    }
+
+    private static string GetSystemGateColor(string gateType)
+    {
+        return gateType switch
+        {
+            "Heavy" => "#f6bd60",
+            "Medium" => "#9ed8ff",
+            _ => "#b7f0c7"
+        };
+    }
+
+    private static string GetSystemGateGlowColor(string gateType)
+    {
+        return gateType switch
+        {
+            "Heavy" => "rgba(246, 189, 96, 0.18)",
+            "Medium" => "rgba(158, 216, 255, 0.18)",
+            _ => "rgba(183, 240, 199, 0.16)"
+        };
+    }
+
+    private static double GetSystemGateMarkerRadius(string gateType)
+    {
+        return gateType switch
+        {
+            "Heavy" => 8.0,
+            "Medium" => 7.0,
+            _ => 6.0
+        };
+    }
+
+    private static double GetSystemGateLineWidth(string gateType)
+    {
+        return gateType switch
+        {
+            "Heavy" => 2.0,
+            "Medium" => 1.7,
+            _ => 1.45
+        };
+    }
+
+    private static double GetDeterministicAngleRadians(string value)
+    {
+        var hash = (uint)StableSeedHasher.HashToInt32(value);
+        return (hash / (double)uint.MaxValue) * Math.PI * 2.0;
+    }
+
+    private static string GetPlanetShortLabel(ReportedSolarSystem system, GeneratedPlanetProfile planet)
+    {
+        var prefix = system.Name + " ";
+        return planet.Name.StartsWith(prefix, StringComparison.Ordinal)
+            ? planet.Name[prefix.Length..]
+            : planet.Name;
+    }
+
+    private static string GetStarColor(string classification)
+    {
+        return classification switch
+        {
+            "Class A" => "#b8d9ff",
+            "Class F" => "#fff0c8",
+            "Class G" => "#ffe08a",
+            "Class K" => "#ffc06d",
+            _ => "#ff8b6a"
+        };
+    }
+
+    private static string GetStarGlowColor(string classification)
+    {
+        return classification switch
+        {
+            "Class A" => "rgba(184, 217, 255, 0.22)",
+            "Class F" => "rgba(255, 240, 200, 0.22)",
+            "Class G" => "rgba(255, 224, 138, 0.22)",
+            "Class K" => "rgba(255, 192, 109, 0.22)",
+            _ => "rgba(255, 139, 106, 0.22)"
+        };
+    }
+
+    private static double GetStarMarkerRadius(string classification)
+    {
+        return classification switch
+        {
+            "Class A" => 15.0,
+            "Class F" => 13.5,
+            "Class G" => 12.0,
+            "Class K" => 10.8,
+            _ => 9.8
+        };
+    }
+
+    private static string GetPlanetColor(string planetType, bool isHabitable)
+    {
+        if (isHabitable)
+        {
+            return "#8fd694";
+        }
+
+        if (planetType.Contains("Oceanic", StringComparison.OrdinalIgnoreCase))
+        {
+            return "#55c7ff";
+        }
+
+        if (planetType.Contains("Ice", StringComparison.OrdinalIgnoreCase))
+        {
+            return "#bde5ff";
+        }
+
+        if (planetType.Contains("Desert", StringComparison.OrdinalIgnoreCase))
+        {
+            return "#f6bd60";
+        }
+
+        if (planetType.Contains("Giant", StringComparison.OrdinalIgnoreCase))
+        {
+            return "#d8a16d";
+        }
+
+        if (planetType.Contains("Terrestrial", StringComparison.OrdinalIgnoreCase))
+        {
+            return "#c8b07d";
+        }
+
+        return "#c9d3df";
+    }
+
+    private static string GetPlanetGlowColor(string planetType, bool isHabitable)
+    {
+        if (isHabitable)
+        {
+            return "rgba(143, 214, 148, 0.18)";
+        }
+
+        if (planetType.Contains("Oceanic", StringComparison.OrdinalIgnoreCase))
+        {
+            return "rgba(85, 199, 255, 0.18)";
+        }
+
+        if (planetType.Contains("Ice", StringComparison.OrdinalIgnoreCase))
+        {
+            return "rgba(189, 229, 255, 0.18)";
+        }
+
+        if (planetType.Contains("Desert", StringComparison.OrdinalIgnoreCase))
+        {
+            return "rgba(246, 189, 96, 0.18)";
+        }
+
+        if (planetType.Contains("Giant", StringComparison.OrdinalIgnoreCase))
+        {
+            return "rgba(216, 161, 109, 0.18)";
+        }
+
+        return "rgba(201, 211, 223, 0.16)";
+    }
+
+    private static string GetPlanetStrokeColor(string planetType, bool isHabitable)
+    {
+        return isHabitable
+            ? "#f3ffcb"
+            : planetType.Contains("Giant", StringComparison.OrdinalIgnoreCase)
+                ? "#f4e0c7"
+                : "#eef5fd";
+    }
+
+    private static string GetPlanetOrbitStroke(string planetType, bool isHabitable)
+    {
+        if (isHabitable)
+        {
+            return "rgba(143, 214, 148, 0.58)";
+        }
+
+        if (planetType.Contains("Oceanic", StringComparison.OrdinalIgnoreCase))
+        {
+            return "rgba(85, 199, 255, 0.44)";
+        }
+
+        if (planetType.Contains("Ice", StringComparison.OrdinalIgnoreCase))
+        {
+            return "rgba(189, 229, 255, 0.42)";
+        }
+
+        if (planetType.Contains("Desert", StringComparison.OrdinalIgnoreCase))
+        {
+            return "rgba(246, 189, 96, 0.42)";
+        }
+
+        if (planetType.Contains("Giant", StringComparison.OrdinalIgnoreCase))
+        {
+            return "rgba(216, 161, 109, 0.42)";
+        }
+
+        return "rgba(201, 211, 223, 0.36)";
+    }
+
+    private static double GetPlanetMarkerRadius(string planetType)
+    {
+        if (planetType.Contains("Giant", StringComparison.OrdinalIgnoreCase))
+        {
+            return 7.2;
+        }
+
+        if (planetType.Contains("Oceanic", StringComparison.OrdinalIgnoreCase))
+        {
+            return 5.4;
+        }
+
+        if (planetType.Contains("Terrestrial", StringComparison.OrdinalIgnoreCase) || planetType.Contains("Desert", StringComparison.OrdinalIgnoreCase))
+        {
+            return 4.8;
+        }
+
+        if (planetType.Contains("Ice", StringComparison.OrdinalIgnoreCase))
+        {
+            return 4.4;
+        }
+
+        return 4.0;
     }
 
     private static bool ValidateGateRange(string gateType, double distanceLy)
@@ -5085,6 +5887,7 @@ static class TerritorySolarSystemValidationReportRenderer
         Point3 Position,
         string SourceType,
         string SourceDescription,
+        GeneratedStarProfile Star,
         string StellarSummary,
         string ContentsSummary,
         string FlavorText,
@@ -5095,9 +5898,13 @@ static class TerritorySolarSystemValidationReportRenderer
         bool IsValid);
 
     private sealed record SolarSystemGateSummary(string GateType, double DistanceLy, string TargetAddress, string TargetScope);
+    private sealed record SystemGatePlacement(SolarSystemGateSummary Gate, double AngleRad);
     private sealed record GeneratedStarProfile(string StarName, string Classification, double MassSolar, double TemperatureK, double LuminositySolar, double AgeBillionYears, double HabitableZoneInnerAu, double HabitableZoneOuterAu);
-    private sealed record GeneratedPlanetProfile(string Name, string PlanetType, double SemiMajorAxisAu, double Eccentricity, double InclinationDeg, double OrbitalPeriodYears, int MoonCount, bool HasRings, bool IsHabitable);
-    private sealed record GeneratedSystemProfile(string DisplayName, string StellarSummary, string ContentsSummary, string FlavorText, IReadOnlyList<GeneratedPlanetProfile> Planets);
+    private sealed record GeneratedPlanetProfile(string Name, string PlanetType, double SemiMajorAxisAu, double Eccentricity, double InclinationDeg, double OrbitalPeriodYears, int MoonCount, int RingCount, bool IsHabitable)
+    {
+        public bool HasRings => RingCount > 0;
+    }
+    private sealed record GeneratedSystemProfile(string DisplayName, GeneratedStarProfile Star, string StellarSummary, string ContentsSummary, string FlavorText, IReadOnlyList<GeneratedPlanetProfile> Planets);
     private sealed record ValidationCheck(string Name, bool Passed);
     private sealed record ProjectionWarning(string Name, bool IsTriggered);
     private sealed record ValidationResult(IReadOnlyList<ValidationCheck> HardChecks, IReadOnlyList<ProjectionWarning> Warnings);
@@ -6328,5 +7135,6 @@ readonly record struct ProjectionBounds(double MinX, double MaxX, double MinY, d
     }
 }
 
-sealed record SolarSystemReport(string Html, int SystemCount, string PathReportFileName, string PathReportHtml);
+sealed record GeneratedTextArtifact(string FileName, string Content);
+sealed record SolarSystemReport(string Html, int SystemCount, string PathReportFileName, string PathReportHtml, IEnumerable<GeneratedTextArtifact> SystemMapArtifacts);
 sealed record GenerationResult(string OutputDirectory, string DiagramPath, string ShadedDiagramPath, IReadOnlyList<string> SectorDiagramPaths, string HeavyLinkDiagramPath, string RegionLinkReportPath, string SolarSystemReportPath, string PathValidationReportPath, string InteractiveViewerPath, int RegionCount, Span3 TerritorySpan, int HeavyLinkCount, int SolarSystemCount, string Status, string Message);

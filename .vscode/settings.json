@@ -7,6 +7,10 @@
         "/^powershell\\.exe -NoLogo -NoProfile -Command \"Set-Location 'c:\\\\Users\\\\idgarad\\\\Documents\\\\Git Projects\\\\GalaxySim10'; dotnet run\"$/": {
             "approve": true,
             "matchCommandLine": true
+        },
+        "/^Set-Location \"c:\\\\Users\\\\idgarad\\\\Documents\\\\Git Projects\\\\GalaxySim10\"; dotnet build GalaxySim10\\.csproj -c Release$/": {
+            "approve": true,
+            "matchCommandLine": true
         }
     }
 }
