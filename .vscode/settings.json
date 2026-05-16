@@ -11,6 +11,10 @@
         "/^Set-Location \"c:\\\\Users\\\\idgarad\\\\Documents\\\\Git Projects\\\\GalaxySim10\"; dotnet build GalaxySim10\\.csproj -c Release$/": {
             "approve": true,
             "matchCommandLine": true
-        }
+        },
+        "dotnet build": true,
+        "dotnet run": true,
+        "ConvertFrom-Json": true,
+        "ForEach-Object": true
     }
 }

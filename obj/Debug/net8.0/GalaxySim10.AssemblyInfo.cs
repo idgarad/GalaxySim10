@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("GalaxySim10")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+abbb4a26f5c12b3b8fd2b7b3141d332a2380132d")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+f3b7e7b4aa16995932a778932fb5f0582581ef0d")]
 [assembly: System.Reflection.AssemblyProductAttribute("GalaxySim10")]
 [assembly: System.Reflection.AssemblyTitleAttribute("GalaxySim10")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

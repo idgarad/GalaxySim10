@@ -1,0 +1,247 @@
+﻿<!DOCTYPE html>
+<html lang='en'>
+<head>
+  <meta charset='UTF-8' />
+  <meta name='viewport' content='width=device-width, initial-scale=1.0' />
+  <title>TEST T0R00S00-SYS09 M00000009-8P53 System 3D</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; background: radial-gradient(circle at top, #0b1626, #04070d 65%); color: #e7eef7; font-family: Consolas, 'Courier New', monospace; }
+    .shell { padding: 24px 28px 18px; }
+    h1 { margin: 0 0 8px; font-size: 28px; font-weight: 500; }
+    .meta { color: #8fa6be; font-size: 14px; margin-bottom: 10px; }
+    .subtle { color: #9db4ca; font-size: 13px; margin-bottom: 14px; }
+    .hint { color: #9db4ca; font-size: 13px; margin-bottom: 14px; }
+    .summary-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 12px; margin-bottom: 14px; }
+    .summary-card { background: rgba(10,20,34,0.82); border: 1px solid #22384d; border-radius: 14px; padding: 12px 14px; }
+    .summary-title { color: #9ed8ff; font-size: 14px; margin-bottom: 8px; }
+    .summary-row { color: #dbe8f4; font-size: 12px; margin: 4px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    canvas { width: min(1200px, calc(100vw - 56px)); height: min(840px, calc(100vh - 176px)); border: 1px solid #22384d; border-radius: 18px; background: linear-gradient(180deg, rgba(10,20,34,0.92), rgba(3,7,12,0.96)); display: block; box-shadow: 0 18px 48px rgba(0,0,0,0.32); cursor: grab; }
+    canvas.dragging { cursor: grabbing; }
+  </style>
+</head>
+<body>
+  <div class='shell' id='viewer-shell'>
+    <h1>T0R00S00-SYS09 | M00000009-8P53 System 3D</h1>
+    <div class='meta'>TEST | Random Local System | Gates H/M/L 0/0/1 | 8 planets | 3 belts</div>
+    <div class='subtle'>Class M primary M00000009-8P53 Primary | 0.24 Msol | 3206 K | 7.2 Gyr | Habitable zone 0.14-0.34 AU</div>
+    <div class='hint'>Left-drag to rotate. Right-drag or Shift-drag to pan. W/S dolly in and out. Scroll to zoom. Double-click to reset the view.</div>
+    <div class='summary-grid'>
+      <div class='summary-card'>
+        <div class='summary-title'>Planets</div>
+        <div class='summary-row'>I | 0.13 AU | Rocky Inner World | 1 moon(s) | 0 ring(s)</div>
+        <div class='summary-row'>II | 0.41 AU | Rocky Inner World | 0 moon(s) | 0 ring(s)</div>
+        <div class='summary-row'>III | 0.69 AU | Ice World | 0 moon(s) | 0 ring(s)</div>
+        <div class='summary-row'>IV | 0.97 AU | Gas Giant | 23 moon(s) | 0 ring(s)</div>
+        <div class='summary-row'>V | 1.25 AU | Ice World | 1 moon(s) | 0 ring(s)</div>
+        <div class='summary-row'>VI | 1.60 AU | Ice World | 2 moon(s) | 0 ring(s)</div>
+        <div class='summary-row'>VII | 2.82 AU | Gas Giant | 15 moon(s) | 0 ring(s)</div>
+        <div class='summary-row'>VIII | 4.62 AU | Gas Giant | 11 moon(s) | 0 ring(s)</div>
+      </div>
+      <div class='summary-card'>
+        <div class='summary-title'>Asteroid Belts</div>
+        <div class='summary-row'>Small belt | Near | 2.15-2.38 AU | 2 sites</div>
+        <div class='summary-row'>Medium belt | Mid-range | 3.33-3.63 AU | 4 sites</div>
+        <div class='summary-row'>Large belt | Far | 6.15-6.38 AU | 7 sites</div>
+      </div>
+      <div class='summary-card'>
+        <div class='summary-title'>Star Gates</div>
+        <div class='summary-row'>Light -&gt; T0R00S00-SYS14 | 5.52 ly</div>
+      </div>
+    </div>
+    <div class='subtle'>Asteroid belts and star gates share the same rendered system plane as planetary orbits.</div>
+    <canvas id='view' width='1200' height='840'></canvas>
+  </div>
+  <script>
+    const planets = [{"name":"M00000009-8P53 I","shortLabel":"I","orbitRx":0.129,"orbitRy":0.129,"focusOffset":0.007,"phase":3.839264,"orbitRotationRad":5.505804,"inclinationRad":0.045906,"radius":4.0,"fill":"#c9d3df","stroke":"#eef5fd","glow":"rgba(201, 211, 223, 0.16)","orbitStroke":"rgba(201, 211, 223, 0.36)","orbitWidth":1.10,"hasRings":false,"isHabitable":false},{"name":"M00000009-8P53 II","shortLabel":"II","orbitRx":0.409,"orbitRy":0.408,"focusOffset":0.034,"phase":4.446307,"orbitRotationRad":4.055621,"inclinationRad":0.118157,"radius":4.0,"fill":"#c9d3df","stroke":"#eef5fd","glow":"rgba(201, 211, 223, 0.16)","orbitStroke":"rgba(201, 211, 223, 0.36)","orbitWidth":1.10,"hasRings":false,"isHabitable":false},{"name":"M00000009-8P53 III","shortLabel":"III","orbitRx":0.689,"orbitRy":0.688,"focusOffset":0.04,"phase":5.890287,"orbitRotationRad":4.697516,"inclinationRad":0.17157,"radius":4.4,"fill":"#bde5ff","stroke":"#eef5fd","glow":"rgba(189, 229, 255, 0.18)","orbitStroke":"rgba(189, 229, 255, 0.42)","orbitWidth":1.10,"hasRings":false,"isHabitable":false},{"name":"M00000009-8P53 IV","shortLabel":"IV","orbitRx":0.969,"orbitRy":0.968,"focusOffset":0.042,"phase":1.331599,"orbitRotationRad":5.188402,"inclinationRad":0.048446,"radius":7.2,"fill":"#d8a16d","stroke":"#f4e0c7","glow":"rgba(216, 161, 109, 0.18)","orbitStroke":"rgba(216, 161, 109, 0.42)","orbitWidth":1.10,"hasRings":false,"isHabitable":false},{"name":"M00000009-8P53 V","shortLabel":"V","orbitRx":1.249,"orbitRy":1.247,"focusOffset":0.075,"phase":0.292815,"orbitRotationRad":5.665362,"inclinationRad":0.024329,"radius":4.4,"fill":"#bde5ff","stroke":"#eef5fd","glow":"rgba(189, 229, 255, 0.18)","orbitStroke":"rgba(189, 229, 255, 0.42)","orbitWidth":1.10,"hasRings":false,"isHabitable":false},{"name":"M00000009-8P53 VI","shortLabel":"VI","orbitRx":1.598,"orbitRy":1.592,"focusOffset":0.134,"phase":1.763765,"orbitRotationRad":6.227688,"inclinationRad":0.182882,"radius":4.4,"fill":"#bde5ff","stroke":"#eef5fd","glow":"rgba(189, 229, 255, 0.18)","orbitStroke":"rgba(189, 229, 255, 0.42)","orbitWidth":1.10,"hasRings":false,"isHabitable":false},{"name":"M00000009-8P53 VII","shortLabel":"VII","orbitRx":2.819,"orbitRy":2.817,"focusOffset":0.102,"phase":5.878308,"orbitRotationRad":0.210911,"inclinationRad":0.038732,"radius":7.2,"fill":"#d8a16d","stroke":"#f4e0c7","glow":"rgba(216, 161, 109, 0.18)","orbitStroke":"rgba(216, 161, 109, 0.42)","orbitWidth":1.10,"hasRings":false,"isHabitable":false},{"name":"M00000009-8P53 VIII","shortLabel":"VIII","orbitRx":4.622,"orbitRy":4.62,"focusOffset":0.131,"phase":0.060639,"orbitRotationRad":5.887708,"inclinationRad":0.022284,"radius":7.2,"fill":"#d8a16d","stroke":"#f4e0c7","glow":"rgba(216, 161, 109, 0.18)","orbitStroke":"rgba(216, 161, 109, 0.42)","orbitWidth":1.10,"hasRings":false,"isHabitable":false}];
+    const belts = [{"label":"Small belt | Near | 2.15-2.38 AU | 2 sites","radius":2.264,"halfWidth":0.113,"fill":"#d4a373","stroke":"#f6bd60","sites":2},{"label":"Medium belt | Mid-range | 3.33-3.63 AU | 4 sites","radius":3.477,"halfWidth":0.15,"fill":"#9bb4c9","stroke":"#9ed8ff","sites":4},{"label":"Large belt | Far | 6.15-6.38 AU | 7 sites","radius":6.265,"halfWidth":0.113,"fill":"#85c7c2","stroke":"#9be6d0","sites":7}];
+    const gates = [{"position":{"x":0.284,"y":-5.396,"z":0},"label":"T0R00S00-SYS14","symbol":"L","fill":"rgba(14, 24, 36, 0.96)","stroke":"#b7f0c7","glow":"rgba(183, 240, 199, 0.16)","radius":6.0,"lineWidth":1.5}];
+    const gateOrbitRadius = 5.404;
+    const sceneExtent = 8.609;
+    const star = { color: '#ff8b6a', glow: 'rgba(255, 139, 106, 0.22)', radius: 9.8 };
+    const shell = document.getElementById('viewer-shell');
+    const canvas = document.getElementById('view');
+    const ctx = canvas.getContext('2d');
+    const orbitSteps = 72;
+    let yaw = -0.72;
+    let pitch = 0.48;
+    let zoom = 4.4;
+    let panX = 0;
+    let panY = 0;
+    let dolly = 0;
+    let dragging = false;
+    let dragMode = 'rotate';
+    let zoomTargetActive = false;
+    let lastX = 0;
+    let lastY = 0;
+    const baseScale = Math.max(5.0, 430 / Math.max(2.0, sceneExtent));
+    const distanceBase = Math.max(32.0, sceneExtent * 3.2);
+    function resetView() { yaw = -0.72; pitch = 0.48; zoom = 4.4; panX = 0; panY = 0; dolly = 0; render(); }
+    function applyZoom(deltaY) { const factor = Math.exp(deltaY * 0.0030); zoom = Math.max(0.40, Math.min(24.0, zoom * factor)); render(); }
+    function rotateView(point) {
+      const cy = Math.cos(yaw), sy = Math.sin(yaw);
+      const cp = Math.cos(pitch), sp = Math.sin(pitch);
+      const x1 = (point.x * cy) - (point.z * sy);
+      const z1 = (point.x * sy) + (point.z * cy);
+      const y2 = (point.y * cp) - (z1 * sp);
+      const z2 = (point.y * sp) + (z1 * cp);
+      return { x: x1, y: y2, z: z2 };
+    }
+    function rotateX(point, angle) { const cos = Math.cos(angle); const sin = Math.sin(angle); return { x: point.x, y: (point.y * cos) - (point.z * sin), z: (point.y * sin) + (point.z * cos) }; }
+    function rotateZ(point, angle) { const cos = Math.cos(angle); const sin = Math.sin(angle); return { x: (point.x * cos) - (point.y * sin), y: (point.x * sin) + (point.y * cos), z: point.z }; }
+    function orbitalPoint(planet, angle) {
+      const x = (planet.orbitRx * Math.cos(angle)) - planet.focusOffset;
+      const y = planet.orbitRy * Math.sin(angle);
+      let point = { x, y, z: 0 };
+      point = rotateX(point, planet.inclinationRad);
+      point = rotateZ(point, planet.orbitRotationRad);
+      return point;
+    }
+    function project(point) {
+      const distance = distanceBase + (18 * zoom);
+      const shiftedZ = Math.min(point.z + dolly, distance - 2.0);
+      const perspective = distance / (distance - shiftedZ);
+      return { x: canvas.width / 2 + panX + (point.x * perspective * baseScale), y: canvas.height / 2 + panY + (point.y * perspective * baseScale), scale: perspective, z: shiftedZ };
+    }
+    function traceCircularOrbit(radius) {
+      for (let step = 0; step <= orbitSteps; step++) {
+        const angle = (Math.PI * 2 * step) / orbitSteps;
+        const sample = { x: radius * Math.cos(angle), y: radius * Math.sin(angle), z: 0 };
+        const projected = project(rotateView(sample));
+        if (step === 0) { ctx.moveTo(projected.x, projected.y); } else { ctx.lineTo(projected.x, projected.y); }
+      }
+    }
+    function drawOrbit(planet) {
+      ctx.strokeStyle = planet.orbitStroke;
+      ctx.lineWidth = planet.orbitWidth;
+      ctx.beginPath();
+      for (let step = 0; step <= orbitSteps; step++) {
+        const sample = orbitalPoint(planet, (Math.PI * 2 * step) / orbitSteps);
+        const projected = project(rotateView(sample));
+        if (step === 0) { ctx.moveTo(projected.x, projected.y); } else { ctx.lineTo(projected.x, projected.y); }
+      }
+      ctx.stroke();
+    }
+    function drawBelt(belt) {
+      const innerRadius = Math.max(0.08, belt.radius - belt.halfWidth);
+      const outerRadius = belt.radius + belt.halfWidth;
+      ctx.fillStyle = belt.fill;
+      ctx.beginPath();
+      traceCircularOrbit(outerRadius);
+      for (let step = orbitSteps; step >= 0; step--) {
+        const angle = (Math.PI * 2 * step) / orbitSteps;
+        const sample = { x: innerRadius * Math.cos(angle), y: innerRadius * Math.sin(angle), z: 0 };
+        const projected = project(rotateView(sample));
+        ctx.lineTo(projected.x, projected.y);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.save();
+      ctx.strokeStyle = belt.stroke;
+      ctx.lineWidth = 1.4;
+      ctx.setLineDash([5, 8]);
+      ctx.beginPath();
+      traceCircularOrbit(belt.radius);
+      ctx.stroke();
+      ctx.restore();
+    }
+    function drawStar() {
+      const projected = project(rotateView({ x: 0, y: 0, z: 0 }));
+      const radius = Math.max(star.radius, projected.scale * star.radius);
+      ctx.fillStyle = star.glow;
+      ctx.beginPath();
+      ctx.arc(projected.x, projected.y, radius * 2.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = star.color;
+      ctx.strokeStyle = 'rgba(255, 246, 213, 0.95)';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.arc(projected.x, projected.y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    function drawCircularOrbit(radius, strokeStyle, lineWidth) {
+      ctx.strokeStyle = strokeStyle;
+      ctx.lineWidth = lineWidth;
+      ctx.beginPath();
+      traceCircularOrbit(radius);
+      ctx.stroke();
+    }
+    function drawGate(entry) {
+      const radius = Math.max(entry.gate.radius, entry.projected.scale * entry.gate.radius);
+      ctx.fillStyle = entry.gate.glow;
+      ctx.beginPath();
+      ctx.arc(entry.projected.x, entry.projected.y, radius * 2.0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = entry.gate.fill;
+      ctx.strokeStyle = entry.gate.stroke;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.rect(entry.projected.x - radius, entry.projected.y - radius, radius * 2.0, radius * 2.0);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#eef5fd';
+      ctx.font = '10px Consolas';
+      ctx.fillText(entry.gate.symbol, entry.projected.x - 3, entry.projected.y + 3);
+      ctx.font = '11px Consolas';
+      ctx.fillText(entry.gate.label, entry.projected.x + radius + 8, entry.projected.y + 10);
+    }
+    function drawPlanet(entry) {
+      const radius = Math.max(entry.planet.radius, entry.projected.scale * entry.planet.radius);
+      ctx.fillStyle = entry.planet.glow;
+      ctx.beginPath();
+      ctx.arc(entry.projected.x, entry.projected.y, radius * 2.1, 0, Math.PI * 2);
+      ctx.fill();
+      if (entry.planet.hasRings) {
+        ctx.strokeStyle = 'rgba(244, 241, 222, 0.72)';
+        ctx.lineWidth = 1.0;
+        ctx.beginPath();
+        ctx.ellipse(entry.projected.x, entry.projected.y, radius * 1.9, radius * 0.72, 0.35, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.fillStyle = entry.planet.fill;
+      ctx.strokeStyle = entry.planet.stroke;
+      ctx.lineWidth = entry.planet.isHabitable ? 1.6 : 1.1;
+      ctx.beginPath();
+      ctx.arc(entry.projected.x, entry.projected.y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#eef5fd';
+      ctx.font = '11px Consolas';
+      ctx.fillText(entry.planet.shortLabel, entry.projected.x + 8, entry.projected.y - 6);
+    }
+    function render() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#06111d';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      for (const belt of belts) { drawBelt(belt); }
+      for (const planet of planets) { drawOrbit(planet); }
+      if (gates.length > 0) { drawCircularOrbit(gateOrbitRadius, 'rgba(94, 128, 154, 0.72)', 1.25); }
+      const projectedGates = gates.map(gate => { const rotated = rotateView(gate.position); return { gate, projected: project(rotated), depth: rotated.z }; }).sort((left, right) => left.depth - right.depth);
+      drawStar();
+      const bodies = planets.map(planet => { const orbit = orbitalPoint(planet, planet.phase); const rotated = rotateView(orbit); return { planet, projected: project(rotated), depth: rotated.z }; }).sort((left, right) => left.depth - right.depth);
+      for (const body of bodies) { drawPlanet(body); }
+      for (const gate of projectedGates) { drawGate(gate); }
+    }
+    canvas.addEventListener('contextmenu', event => event.preventDefault());
+    canvas.addEventListener('pointerdown', event => { dragging = true; dragMode = (event.button === 2 || event.shiftKey) ? 'pan' : 'rotate'; lastX = event.clientX; lastY = event.clientY; canvas.classList.add('dragging'); });
+    shell.addEventListener('pointerenter', () => { zoomTargetActive = true; });
+    shell.addEventListener('pointerleave', () => { zoomTargetActive = false; });
+    window.addEventListener('pointerup', () => { dragging = false; canvas.classList.remove('dragging'); });
+    window.addEventListener('pointermove', event => {
+      if (!dragging) return;
+      const dx = event.clientX - lastX;
+      const dy = event.clientY - lastY;
+      lastX = event.clientX;
+      lastY = event.clientY;
+      if (dragMode === 'pan') { panX += dx; panY += dy; } else { yaw += dx * 0.008; pitch = Math.max(-1.35, Math.min(1.35, pitch + dy * 0.008)); }
+      render();
+    });
+    shell.addEventListener('wheel', event => { event.preventDefault(); applyZoom(event.deltaY); }, { passive: false });
+    window.addEventListener('wheel', event => { if (!zoomTargetActive) return; event.preventDefault(); applyZoom(event.deltaY); }, { passive: false });
+    window.addEventListener('keydown', event => { if (!zoomTargetActive) return; const moveStep = Math.max(0.8, sceneExtent * 0.10); if (event.key === 'w' || event.key === 'W') { dolly += moveStep; } else if (event.key === 's' || event.key === 'S') { dolly -= moveStep; } else { return; } event.preventDefault(); render(); });
+    canvas.addEventListener('dblclick', () => resetView());
+    render();
+  </script>
+</body>
+</html>

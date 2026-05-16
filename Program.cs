@@ -3788,6 +3788,7 @@ static class TerritorySolarSystemValidationReportRenderer
         var random = new Random(seed);
         var star = GenerateStarProfile(random);
         var planets = GeneratePlanetProfiles(random, star, draft.SourceType);
+        var belts = GenerateAsteroidBeltProfiles(random, star, planets, draft.Gates.Count);
         var displayName = GenerateSystemDisplayName(creationOrder, star, planets);
         star = star with { StarName = displayName + " Primary" };
         planets = ApplyPlanetNames(planets, displayName);
@@ -3795,15 +3796,16 @@ static class TerritorySolarSystemValidationReportRenderer
         var totalMoons = planets.Sum(planet => planet.MoonCount);
         var ringedPlanets = planets.Count(planet => planet.HasRings);
         var giantCount = planets.Count(planet => planet.PlanetType.Contains("Giant", StringComparison.Ordinal));
+        var totalMiningSites = belts.Sum(belt => belt.ConcurrentMiningSiteCapacity);
 
         var stellarSummary = $"{star.Classification} primary {star.StarName} | {star.MassSolar:0.00} Msol | {star.TemperatureK:0} K | {star.AgeBillionYears:0.0} Gyr | Habitable zone {star.HabitableZoneInnerAu:0.00}-{star.HabitableZoneOuterAu:0.00} AU";
-        var contentsSummary = $"System with {draft.Gates.Count} gate(s): {draft.Gates.Count(gate => gate.GateType == "Heavy")} heavy, {draft.Gates.Count(gate => gate.GateType == "Medium")} medium, {draft.Gates.Count(gate => gate.GateType == "Light")} light. Generated profile: {planets.Count} planets, {totalMoons} moons, {ringedPlanets} ringed world(s), {giantCount} giant world(s), {habitableCount} habitable candidate(s).";
-        var flavorText = BuildFlavorText(draft.SourceType, star, planets, habitableCount, ringedPlanets);
+        var contentsSummary = $"System with {draft.Gates.Count} gate(s): {draft.Gates.Count(gate => gate.GateType == "Heavy")} heavy, {draft.Gates.Count(gate => gate.GateType == "Medium")} medium, {draft.Gates.Count(gate => gate.GateType == "Light")} light. Generated profile: {planets.Count} planets, {totalMoons} moons, {ringedPlanets} ringed world(s), {giantCount} giant world(s), {habitableCount} habitable candidate(s), {belts.Count} asteroid belt(s), {totalMiningSites} concurrent mining event site(s).";
+        var flavorText = BuildFlavorText(draft.SourceType, star, planets, belts, habitableCount, ringedPlanets);
 
-        return new GeneratedSystemProfile(displayName, star, stellarSummary, contentsSummary, flavorText, planets);
+        return new GeneratedSystemProfile(displayName, star, stellarSummary, contentsSummary, flavorText, planets, belts);
     }
 
-    private static string BuildFlavorText(string sourceType, GeneratedStarProfile star, IReadOnlyList<GeneratedPlanetProfile> planets, int habitableCount, int ringedPlanets)
+    private static string BuildFlavorText(string sourceType, GeneratedStarProfile star, IReadOnlyList<GeneratedPlanetProfile> planets, IReadOnlyList<GeneratedAsteroidBeltProfile> belts, int habitableCount, int ringedPlanets)
     {
         var innerWorld = planets.FirstOrDefault();
         var outerWorld = planets.LastOrDefault();
@@ -3813,13 +3815,17 @@ static class TerritorySolarSystemValidationReportRenderer
         var ringText = ringedPlanets > 0
             ? $", with {ringedPlanets} ringed planet(s) shaping the outer lanes"
             : ".";
+        var beltSummary = string.Join(", ", belts.Select(belt => $"{belt.SizeTier.ToLowerInvariant()} {belt.CompositionBand.ToLowerInvariant()} lanes at {belt.CenterDistanceAu:0.00} AU"));
+        var beltText = belts.Count > 0
+            ? $" Asteroid belts span {beltSummary}."
+            : string.Empty;
 
         if (innerWorld is null || outerWorld is null)
         {
-            return habitabilityText + ringText;
+            return habitabilityText + ringText + beltText;
         }
 
-        return $"{sourceType} profile. Inner orbit opens with {innerWorld.PlanetType.ToLowerInvariant()} conditions at {innerWorld.SemiMajorAxisAu:0.00} AU while the outer fringe ends in {outerWorld.PlanetType.ToLowerInvariant()} territory at {outerWorld.SemiMajorAxisAu:0.00} AU. {habitabilityText}{ringText}";
+        return $"{sourceType} profile. Inner orbit opens with {innerWorld.PlanetType.ToLowerInvariant()} conditions at {innerWorld.SemiMajorAxisAu:0.00} AU while the outer fringe ends in {outerWorld.PlanetType.ToLowerInvariant()} territory at {outerWorld.SemiMajorAxisAu:0.00} AU. {habitabilityText}{ringText}{beltText}";
     }
 
     private static string GenerateSystemDisplayName(int creationOrder, GeneratedStarProfile star, IReadOnlyList<GeneratedPlanetProfile> planets)
@@ -3926,6 +3932,259 @@ static class TerritorySolarSystemValidationReportRenderer
         }
 
         return planets;
+    }
+
+    private static List<GeneratedAsteroidBeltProfile> GenerateAsteroidBeltProfiles(Random random, GeneratedStarProfile star, IReadOnlyList<GeneratedPlanetProfile> planets, int gateCount)
+    {
+        if (planets.Count == 0)
+        {
+            return [];
+        }
+
+        var largestOrbit = planets.Max(planet => planet.SemiMajorAxisAu * (1.0 + planet.Eccentricity));
+        var innerLimit = Math.Max(0.22, 0.20 * Math.Sqrt(star.MassSolar));
+        var outerLimit = Math.Max(innerLimit + 2.2, Math.Min(42.0, Math.Max(largestOrbit * 1.35, 14.0 * star.MassSolar)));
+        var gateOrbitAu = gateCount > 0 ? GetPreferredSystemGateOrbitAu(largestOrbit) : double.NaN;
+        var occupiedBands = BuildAsteroidBeltOccupiedBands(planets, innerLimit, outerLimit, gateOrbitAu);
+        var candidateBands = BuildAsteroidBeltCandidates(innerLimit, outerLimit, occupiedBands);
+
+        if (candidateBands.Count == 0)
+        {
+            return [];
+        }
+
+        var sortedBands = candidateBands
+            .OrderBy(band => band.CenterDistanceAu)
+            .ToList();
+        var selected = new List<GeneratedAsteroidBeltProfile>(3);
+        var preferredGateOrbitAu = double.IsNaN(gateOrbitAu) ? GetPreferredSystemGateOrbitAu(largestOrbit) : gateOrbitAu;
+        var gateClearanceAu = GetAsteroidBeltGateClearanceAu();
+        var nearBand = SelectAsteroidBeltCandidate(sortedBands, candidate => candidate.CenterDistanceAu <= Math.Max(2.6, star.HabitableZoneOuterAu + 0.8));
+        var midBandUpperBoundAu = gateCount > 0 ? preferredGateOrbitAu : Math.Max(6.5, largestOrbit * 0.72);
+        var midBand = SelectAsteroidBeltCandidate(sortedBands, candidate => candidate.CenterDistanceAu > Math.Max(1.8, star.HabitableZoneOuterAu) && candidate.CenterDistanceAu <= midBandUpperBoundAu);
+        var farBandMinimumInnerEdgeAu = gateCount > 0
+            ? preferredGateOrbitAu + gateClearanceAu
+            : largestOrbit + GetAsteroidBeltPlanetClearanceAu();
+        var farBand = SelectOuterAsteroidBeltCandidate(sortedBands, farBandMinimumInnerEdgeAu);
+
+        if (nearBand is not null)
+        {
+            selected.Add(BuildAsteroidBeltProfile(random, nearBand, "Small", "Near", 0.08, 0.18, 2, 5));
+        }
+
+        if (midBand is not null && selected.All(existing => !AsteroidBeltsOverlap(existing.InnerEdgeAu, existing.OuterEdgeAu, midBand.InnerEdgeAu, midBand.OuterEdgeAu)))
+        {
+            selected.Add(BuildAsteroidBeltProfile(random, midBand, "Medium", "Mid-range", 0.15, 0.32, 4, 9));
+        }
+
+        if (farBand is not null && selected.All(existing => !AsteroidBeltsOverlap(existing.InnerEdgeAu, existing.OuterEdgeAu, farBand.InnerEdgeAu, farBand.OuterEdgeAu)))
+        {
+            selected.Add(BuildAsteroidBeltProfile(random, farBand, "Large", "Far", 0.24, 0.48, 7, 15, preferOuterPlacement: true, minimumInnerEdgeAu: farBandMinimumInnerEdgeAu));
+        }
+
+        if (selected.Count == 0)
+        {
+            var fallbackBand = sortedBands[^1];
+            selected.Add(BuildAsteroidBeltProfile(random, fallbackBand, "Medium", ClassifyCompositionBand(fallbackBand.CenterDistanceAu, star), 0.15, 0.32, 4, 9));
+        }
+
+        selected.Sort((left, right) => left.CenterDistanceAu.CompareTo(right.CenterDistanceAu));
+        return selected;
+    }
+
+    private static AsteroidBeltCandidate? SelectAsteroidBeltCandidate(IReadOnlyList<AsteroidBeltCandidate> candidates, Func<AsteroidBeltCandidate, bool> predicate)
+    {
+        return candidates
+            .Where(predicate)
+            .OrderByDescending(candidate => candidate.AvailableSpanAu)
+            .ThenBy(candidate => candidate.CenterDistanceAu)
+            .FirstOrDefault();
+    }
+
+    private static AsteroidBeltCandidate? SelectOuterAsteroidBeltCandidate(IReadOnlyList<AsteroidBeltCandidate> candidates, double minimumInnerEdgeAu)
+    {
+        return candidates
+            .Where(candidate => candidate.InnerEdgeAu >= minimumInnerEdgeAu)
+            .OrderByDescending(candidate => candidate.CenterDistanceAu)
+            .ThenByDescending(candidate => candidate.AvailableSpanAu)
+            .FirstOrDefault();
+    }
+
+    private static List<AsteroidBeltOccupiedBand> BuildAsteroidBeltOccupiedBands(IReadOnlyList<GeneratedPlanetProfile> planets, double innerLimit, double outerLimit, double gateOrbitAu)
+    {
+        var planetClearanceAu = GetAsteroidBeltPlanetClearanceAu();
+        var occupiedBands = planets
+            .Select(planet =>
+            {
+                var periapsisAu = planet.SemiMajorAxisAu * (1.0 - planet.Eccentricity);
+                var apoapsisAu = planet.SemiMajorAxisAu * (1.0 + planet.Eccentricity);
+                return new AsteroidBeltOccupiedBand(
+                    Math.Max(innerLimit, periapsisAu - planetClearanceAu),
+                    Math.Min(outerLimit, apoapsisAu + planetClearanceAu));
+            })
+            .Where(band => band.OuterEdgeAu > band.InnerEdgeAu)
+            .OrderBy(band => band.InnerEdgeAu)
+            .ToList();
+
+        if (!double.IsNaN(gateOrbitAu))
+        {
+            var gateClearanceAu = GetAsteroidBeltGateClearanceAu();
+            occupiedBands.Add(new AsteroidBeltOccupiedBand(
+                Math.Max(innerLimit, gateOrbitAu - gateClearanceAu),
+                Math.Min(outerLimit, gateOrbitAu + gateClearanceAu)));
+        }
+
+        if (occupiedBands.Count == 0)
+        {
+            return [];
+        }
+
+        occupiedBands.Sort((left, right) => left.InnerEdgeAu.CompareTo(right.InnerEdgeAu));
+        var mergedBands = new List<AsteroidBeltOccupiedBand>(occupiedBands.Count);
+        var current = occupiedBands[0];
+        for (var index = 1; index < occupiedBands.Count; index++)
+        {
+            var next = occupiedBands[index];
+            if (next.InnerEdgeAu <= current.OuterEdgeAu)
+            {
+                current = current with { OuterEdgeAu = Math.Max(current.OuterEdgeAu, next.OuterEdgeAu) };
+                continue;
+            }
+
+            mergedBands.Add(current);
+            current = next;
+        }
+
+        mergedBands.Add(current);
+        return mergedBands;
+    }
+
+    private static List<AsteroidBeltCandidate> BuildAsteroidBeltCandidates(double innerLimit, double outerLimit, IReadOnlyList<AsteroidBeltOccupiedBand> occupiedBands)
+    {
+        var minimumSpanAu = GetMinimumAsteroidBeltSpanAu();
+        var candidates = new List<AsteroidBeltCandidate>();
+        var cursor = innerLimit;
+
+        foreach (var occupiedBand in occupiedBands)
+        {
+            if (occupiedBand.InnerEdgeAu - cursor >= minimumSpanAu)
+            {
+                candidates.Add(BuildAsteroidBeltCandidate(cursor, occupiedBand.InnerEdgeAu));
+            }
+
+            cursor = Math.Max(cursor, occupiedBand.OuterEdgeAu);
+        }
+
+        if (outerLimit - cursor >= minimumSpanAu)
+        {
+            candidates.Add(BuildAsteroidBeltCandidate(cursor, outerLimit));
+        }
+
+        return candidates;
+    }
+
+    private static AsteroidBeltCandidate BuildAsteroidBeltCandidate(double innerEdgeAu, double outerEdgeAu)
+    {
+        var centerDistanceAu = (innerEdgeAu + outerEdgeAu) * 0.5;
+        return new AsteroidBeltCandidate(innerEdgeAu, outerEdgeAu, centerDistanceAu, outerEdgeAu - innerEdgeAu);
+    }
+
+    private static double GetAsteroidBeltGateClearanceAu()
+    {
+        return 0.45;
+    }
+
+    private static double GetAsteroidBeltPlanetClearanceAu()
+    {
+        return 0.18;
+    }
+
+    private static double GetMinimumAsteroidBeltSpanAu()
+    {
+        return 0.40;
+    }
+
+    private static GeneratedAsteroidBeltProfile BuildAsteroidBeltProfile(Random random, AsteroidBeltCandidate candidate, string sizeTier, string defaultCompositionBand, double minWidthFraction, double maxWidthFraction, int minSites, int maxSites, bool preferOuterPlacement = false, double? minimumInnerEdgeAu = null)
+    {
+        var widthFraction = minWidthFraction + (random.NextDouble() * (maxWidthFraction - minWidthFraction));
+        var beltWidth = Math.Min(candidate.AvailableSpanAu - 0.10, Math.Max(0.225, candidate.AvailableSpanAu * widthFraction));
+        beltWidth = Math.Max(0.225, beltWidth);
+        var centerRoll = random.NextDouble();
+        var centerJitterLimit = Math.Max(0.0, (candidate.AvailableSpanAu - beltWidth) * 0.5);
+        var centerDistance = candidate.CenterDistanceAu + ((centerRoll * 2.0) - 1.0) * centerJitterLimit;
+
+        if (preferOuterPlacement)
+        {
+            var leftBound = candidate.InnerEdgeAu + 0.04;
+            var rightBound = candidate.OuterEdgeAu - 0.04;
+            var preferredInnerEdge = minimumInnerEdgeAu.HasValue ? Math.Max(leftBound, minimumInnerEdgeAu.Value) : leftBound;
+            var centerMin = preferredInnerEdge + (beltWidth * 0.5);
+            var centerMax = rightBound - (beltWidth * 0.5);
+
+            if (centerMax >= centerMin)
+            {
+                centerDistance = centerMax - ((centerMax - centerMin) * centerRoll * 0.18);
+            }
+        }
+
+        var innerEdge = Math.Max(candidate.InnerEdgeAu + 0.04, centerDistance - (beltWidth * 0.5));
+        var outerEdge = Math.Min(candidate.OuterEdgeAu - 0.04, centerDistance + (beltWidth * 0.5));
+        centerDistance = (innerEdge + outerEdge) * 0.5;
+        beltWidth = outerEdge - innerEdge;
+        var compositionBand = defaultCompositionBand == "Near" || defaultCompositionBand == "Mid-range" || defaultCompositionBand == "Far"
+            ? defaultCompositionBand
+            : ClassifyCompositionBand(centerDistance, null);
+        var capacityRange = Math.Max(1, maxSites - minSites + 1);
+        var capacity = minSites + Math.Min(capacityRange - 1, (int)Math.Round(((beltWidth - 0.45) / Math.Max(0.10, candidate.AvailableSpanAu)) * (capacityRange - 1)));
+        capacity = Math.Clamp(capacity + random.Next(0, 2), minSites, maxSites);
+        return new GeneratedAsteroidBeltProfile(sizeTier, compositionBand, innerEdge, outerEdge, centerDistance, beltWidth, capacity);
+    }
+
+    private static bool AsteroidBeltsOverlap(double leftInner, double leftOuter, double rightInner, double rightOuter)
+    {
+        return Math.Max(leftInner, rightInner) < Math.Min(leftOuter, rightOuter);
+    }
+
+    private static string ClassifyCompositionBand(double centerDistanceAu, GeneratedStarProfile? star)
+    {
+        if (centerDistanceAu < 2.8)
+        {
+            return "Near";
+        }
+
+        if (centerDistanceAu < 6.8)
+        {
+            return "Mid-range";
+        }
+
+        return "Far";
+    }
+
+    private static double GetPreferredSystemGateOrbitAu(double maxPlanetOrbitAu, double maxAllowedOrbitAu = double.PositiveInfinity)
+    {
+        var minimumOrbitAu = Math.Max(1.6, maxPlanetOrbitAu + 0.08);
+        var preferredOrbitAu = Math.Max(minimumOrbitAu, Math.Max(maxPlanetOrbitAu + 0.65, maxPlanetOrbitAu * 1.12));
+        if (double.IsPositiveInfinity(maxAllowedOrbitAu))
+        {
+            return preferredOrbitAu;
+        }
+
+        if (maxAllowedOrbitAu <= minimumOrbitAu)
+        {
+            return minimumOrbitAu;
+        }
+
+        return Math.Clamp(preferredOrbitAu, minimumOrbitAu, maxAllowedOrbitAu);
+    }
+
+    private static double GetSystemGateOrbitUpperBoundAu(IReadOnlyList<GeneratedAsteroidBeltProfile> asteroidBelts)
+    {
+        var largeBelt = asteroidBelts
+            .Where(belt => string.Equals(belt.SizeTier, "Large", StringComparison.Ordinal))
+            .OrderBy(belt => belt.InnerEdgeAu)
+            .FirstOrDefault();
+
+        return largeBelt is null ? double.PositiveInfinity : Math.Max(0.0, largeBelt.InnerEdgeAu - GetAsteroidBeltGateClearanceAu());
     }
 
     private static List<double> GenerateOrbitalDistances(Random random, int planetCount, GeneratedStarProfile star)
@@ -4226,6 +4485,7 @@ static class TerritorySolarSystemValidationReportRenderer
                 profile.ContentsSummary,
                 profile.FlavorText,
                 profile.Planets,
+                profile.AsteroidBelts,
                 gateSummaries,
                 draft.ValidationResult.HardChecks.Concat(gateCheckSummary).ToList(),
                 draft.ValidationResult.Warnings,
@@ -4792,6 +5052,8 @@ static class TerritorySolarSystemValidationReportRenderer
         var validCount = systems.Count(system => system.IsValid);
         var invalidCount = systems.Count - validCount;
         var totalGateLinks = systems.Sum(system => system.Gates.Count) / 2;
+        var totalAsteroidBelts = systems.Sum(system => system.AsteroidBelts.Count);
+        var totalMiningSites = systems.Sum(system => system.AsteroidBelts.Sum(belt => belt.ConcurrentMiningSiteCapacity));
         var groupedSystems = systems
             .GroupBy(system => system.RegionIndex)
             .OrderBy(group => group.Key)
@@ -4865,6 +5127,8 @@ static class TerritorySolarSystemValidationReportRenderer
         builder.AppendLine($"    <div class=\"card\"><div class=\"label\">Valid</div><div class=\"value\">{validCount}</div></div>");
         builder.AppendLine($"    <div class=\"card\"><div class=\"label\">Invalid</div><div class=\"value\">{invalidCount}</div></div>");
         builder.AppendLine($"    <div class=\"card\"><div class=\"label\">Star Gates</div><div class=\"value\">{totalGateLinks}</div></div>");
+        builder.AppendLine($"    <div class=\"card\"><div class=\"label\">Asteroid Belts</div><div class=\"value\">{totalAsteroidBelts}</div></div>");
+        builder.AppendLine($"    <div class=\"card\"><div class=\"label\">Mining Event Sites</div><div class=\"value\">{totalMiningSites}</div></div>");
         builder.AppendLine("  </div>");
         builder.AppendLine($"  <div class=\"meta\">Random route audit start {Escape(routeAudit.StartAddress)} | reached {routeAudit.ReachableCount} of {routeAudit.TotalSystems} systems | {(routeAudit.Passed ? "PASS" : "FAIL")}</div>");
         if (!routeAudit.Passed)
@@ -4945,6 +5209,15 @@ static class TerritorySolarSystemValidationReportRenderer
                     foreach (var planet in system.Planets)
                     {
                         builder.AppendLine($"            <tr><td>{Escape(planet.Name)}</td><td>{Escape(planet.PlanetType)}</td><td class=\"mono\">{planet.SemiMajorAxisAu:0.00} AU</td><td class=\"mono\">{planet.Eccentricity:0.000}</td><td class=\"mono\">{planet.InclinationDeg:0.0} deg</td><td class=\"mono\">{planet.OrbitalPeriodYears:0.00} yr</td><td>{planet.MoonCount}</td><td>{planet.RingCount}</td><td>{(planet.IsHabitable ? "Candidate" : "No")}</td></tr>");
+                    }
+                    builder.AppendLine("          </tbody>");
+                    builder.AppendLine("        </table>");
+                    builder.AppendLine("        <table>");
+                    builder.AppendLine("          <thead><tr><th>Asteroid Belt</th><th>Composition Band</th><th>Inner Edge</th><th>Outer Edge</th><th>Width</th><th>Mining Sites</th></tr></thead>");
+                    builder.AppendLine("          <tbody>");
+                    foreach (var belt in system.AsteroidBelts)
+                    {
+                        builder.AppendLine($"            <tr><td>{Escape(belt.SizeTier)}</td><td>{Escape(belt.CompositionBand)}</td><td class=\"mono\">{belt.InnerEdgeAu:0.00} AU</td><td class=\"mono\">{belt.OuterEdgeAu:0.00} AU</td><td class=\"mono\">{belt.WidthAu:0.00} AU</td><td>{belt.ConcurrentMiningSiteCapacity}</td></tr>");
                     }
                     builder.AppendLine("          </tbody>");
                     builder.AppendLine("        </table>");
@@ -5065,16 +5338,21 @@ static class TerritorySolarSystemValidationReportRenderer
         const double mapRadius = 350.0;
         const double panelX = 930.0;
 
-        var maxOrbitAu = system.Planets.Count == 0
+        var maxPlanetOrbitAu = system.Planets.Count == 0
             ? 1.0
-            : Math.Max(1.0, system.Planets.Max(planet => planet.SemiMajorAxisAu * (1.0 + planet.Eccentricity)));
+            : system.Planets.Max(planet => planet.SemiMajorAxisAu * (1.0 + planet.Eccentricity));
+        var maxBeltOrbitAu = system.AsteroidBelts.Count == 0
+            ? 1.0
+            : system.AsteroidBelts.Max(belt => belt.OuterEdgeAu);
+        var gatePlacements = BuildSystemGatePlacements(system);
+        var gateOrbitAu = gatePlacements.Count == 0 ? 0.0 : GetPreferredSystemGateOrbitAu(maxPlanetOrbitAu);
+        var maxOrbitAu = Math.Max(1.0, Math.Max(Math.Max(maxPlanetOrbitAu, maxBeltOrbitAu), gateOrbitAu));
         var orbitScale = mapRadius / maxOrbitAu;
         var starColor = GetStarColor(system.Star.Classification);
         var starGlowColor = GetStarGlowColor(system.Star.Classification);
         var starRadius = GetStarMarkerRadius(system.Star.Classification);
         var (heavyCount, mediumCount, lightCount) = CountGateTypes(system);
-        var gatePlacements = BuildSystemGatePlacements(system);
-        var gateOrbitRadius = Math.Min(398.0, mapRadius + 42.0);
+        var gateOrbitRadius = gateOrbitAu * orbitScale;
 
         var builder = new StringBuilder();
         builder.AppendLine("<?xml version='1.0' encoding='UTF-8'?>");
@@ -5082,7 +5360,7 @@ static class TerritorySolarSystemValidationReportRenderer
         builder.AppendLine("  <rect width='100%' height='100%' fill='#04101a' />");
         builder.AppendLine("  <rect x='24' y='24' width='1352' height='932' rx='24' fill='rgba(8,18,30,0.96)' stroke='#17304a' stroke-width='1.2' />");
         builder.AppendLine($"  <text x='44' y='58' fill='#e6eef8' font-size='28' font-family='Consolas, monospace'>{Escape(system.Address)} | {Escape(system.Name)} ORBIT MAP</text>");
-        builder.AppendLine($"  <text x='44' y='86' fill='#88a3bf' font-size='15' font-family='Consolas, monospace'>{Escape(config.TerritoryName)} | {Escape(system.SourceType)} | Gates H/M/L {heavyCount}/{mediumCount}/{lightCount} | {system.Planets.Count} planets</text>");
+        builder.AppendLine($"  <text x='44' y='86' fill='#88a3bf' font-size='15' font-family='Consolas, monospace'>{Escape(config.TerritoryName)} | {Escape(system.SourceType)} | Gates H/M/L {heavyCount}/{mediumCount}/{lightCount} | {system.Planets.Count} planets | {system.AsteroidBelts.Count} belts</text>");
 
         var hzOuterRadius = system.Star.HabitableZoneOuterAu * orbitScale;
         var hzInnerRadius = system.Star.HabitableZoneInnerAu * orbitScale;
@@ -5129,6 +5407,21 @@ static class TerritorySolarSystemValidationReportRenderer
             }
         }
 
+        foreach (var belt in system.AsteroidBelts)
+        {
+            var beltRadius = belt.CenterDistanceAu * orbitScale;
+            var beltWidth = Math.Max(4.0, belt.WidthAu * orbitScale);
+            var beltHalfWidth = beltWidth * 0.5;
+            var beltInnerRadius = Math.Max(0.0, beltRadius - beltHalfWidth);
+            var beltOuterRadius = beltRadius + beltHalfWidth;
+            var beltColor = GetAsteroidBeltFillColor(belt.CompositionBand);
+            var beltStroke = GetAsteroidBeltStrokeColor(belt.CompositionBand);
+            builder.AppendLine($"  <circle cx='{mapCenterX:0.00}' cy='{mapCenterY:0.00}' r='{beltRadius:0.00}' fill='none' stroke='{beltColor}' stroke-opacity='0.18' stroke-width='{beltWidth:0.00}' />");
+            builder.AppendLine($"  <circle cx='{mapCenterX:0.00}' cy='{mapCenterY:0.00}' r='{beltInnerRadius:0.00}' fill='none' stroke='{beltStroke}' stroke-opacity='0.24' stroke-width='1.0' />");
+            builder.AppendLine($"  <circle cx='{mapCenterX:0.00}' cy='{mapCenterY:0.00}' r='{beltOuterRadius:0.00}' fill='none' stroke='{beltStroke}' stroke-opacity='0.38' stroke-width='1.2' />");
+            builder.AppendLine($"  <text x='{mapCenterX + beltOuterRadius + 10.0:0.00}' y='{mapCenterY + 12.0:0.00}' fill='#9fb6cb' font-size='11' font-family='Consolas, monospace'>{Escape(BuildAsteroidBeltSummaryLine(belt))}</text>");
+        }
+
         foreach (var planet in system.Planets)
         {
             var orbitRotation = GetDeterministicAngleRadians($"{system.Address}|{planet.Name}|orbit");
@@ -5171,6 +5464,22 @@ static class TerritorySolarSystemValidationReportRenderer
         }
 
         rowY += 12.0;
+        builder.AppendLine($"  <text x='{panelX:0.00}' y='{rowY:0.00}' fill='#9ed8ff' font-size='18' font-family='Consolas, monospace'>Asteroid Belts</text>");
+        rowY += 28.0;
+        if (system.AsteroidBelts.Count == 0)
+        {
+            builder.AppendLine($"  <text x='{panelX:0.00}' y='{rowY:0.00}' fill='#88a3bf' font-size='12' font-family='Consolas, monospace'>No asteroid belts</text>");
+        }
+        else
+        {
+            foreach (var belt in system.AsteroidBelts)
+            {
+                builder.AppendLine($"  <text x='{panelX:0.00}' y='{rowY:0.00}' fill='#dbe8f4' font-size='12' font-family='Consolas, monospace'>{Escape(BuildAsteroidBeltSummaryLine(belt))}</text>");
+                rowY += 20.0;
+            }
+        }
+
+        rowY += 12.0;
         builder.AppendLine($"  <text x='{panelX:0.00}' y='{rowY:0.00}' fill='#9ed8ff' font-size='18' font-family='Consolas, monospace'>Star Gates</text>");
         rowY += 28.0;
         if (system.Gates.Count == 0)
@@ -5193,18 +5502,23 @@ static class TerritorySolarSystemValidationReportRenderer
 
     private static string RenderSystemOrbit3DHtml(GeneratorConfig config, ReportedSolarSystem system)
     {
-        var maxOrbitAu = system.Planets.Count == 0
+        var maxPlanetOrbitAu = system.Planets.Count == 0
             ? 1.0
-            : Math.Max(1.0, system.Planets.Max(planet => planet.SemiMajorAxisAu * (1.0 + planet.Eccentricity)));
-        var gateOrbitRadius = Math.Max(1.6, maxOrbitAu * 1.18);
-        var sceneExtent = Math.Max(2.0, gateOrbitRadius * 1.35);
+            : system.Planets.Max(planet => planet.SemiMajorAxisAu * (1.0 + planet.Eccentricity));
+        var maxBeltOrbitAu = system.AsteroidBelts.Count == 0
+            ? 1.0
+            : system.AsteroidBelts.Max(belt => belt.OuterEdgeAu);
+        var maxOrbitAu = Math.Max(1.0, Math.Max(maxPlanetOrbitAu, maxBeltOrbitAu));
+        var gatePlacements = BuildSystemGatePlacements(system);
+        var gateOrbitRadius = gatePlacements.Count == 0 ? 0.0 : GetPreferredSystemGateOrbitAu(maxPlanetOrbitAu);
+        var sceneExtent = Math.Max(2.0, Math.Max(maxOrbitAu, gateOrbitRadius) * 1.35);
         var starColor = GetStarColor(system.Star.Classification);
         var starGlowColor = GetStarGlowColor(system.Star.Classification);
         var starRadius = GetStarMarkerRadius(system.Star.Classification);
         var planetsJson = BuildSystemOrbit3DJson(system);
+        var beltsJson = BuildSystemBelt3DJson(system);
         var gatesJson = BuildSystemGate3DJson(system, gateOrbitRadius);
         var (heavyCount, mediumCount, lightCount) = CountGateTypes(system);
-        var gatePlacements = BuildSystemGatePlacements(system);
 
         var builder = new StringBuilder();
         builder.AppendLine("<!DOCTYPE html>");
@@ -5232,7 +5546,7 @@ static class TerritorySolarSystemValidationReportRenderer
         builder.AppendLine("<body>");
         builder.AppendLine("  <div class='shell' id='viewer-shell'>");
         builder.AppendLine($"    <h1>{Escape(system.Address)} | {Escape(system.Name)} System 3D</h1>");
-        builder.AppendLine($"    <div class='meta'>{Escape(config.TerritoryName)} | {Escape(system.SourceType)} | Gates H/M/L {heavyCount}/{mediumCount}/{lightCount} | {system.Planets.Count} planets</div>");
+        builder.AppendLine($"    <div class='meta'>{Escape(config.TerritoryName)} | {Escape(system.SourceType)} | Gates H/M/L {heavyCount}/{mediumCount}/{lightCount} | {system.Planets.Count} planets | {system.AsteroidBelts.Count} belts</div>");
         builder.AppendLine($"    <div class='subtle'>{Escape(system.StellarSummary)}</div>");
         builder.AppendLine("    <div class='hint'>Left-drag to rotate. Right-drag or Shift-drag to pan. W/S dolly in and out. Scroll to zoom. Double-click to reset the view.</div>");
         builder.AppendLine("    <div class='summary-grid'>");
@@ -5241,6 +5555,20 @@ static class TerritorySolarSystemValidationReportRenderer
         foreach (var planet in system.Planets)
         {
             builder.AppendLine($"        <div class='summary-row'>{Escape(BuildPlanetSummaryLine(system, planet))}</div>");
+        }
+        builder.AppendLine("      </div>");
+        builder.AppendLine("      <div class='summary-card'>");
+        builder.AppendLine("        <div class='summary-title'>Asteroid Belts</div>");
+        if (system.AsteroidBelts.Count == 0)
+        {
+            builder.AppendLine("        <div class='summary-row'>No asteroid belts</div>");
+        }
+        else
+        {
+            foreach (var belt in system.AsteroidBelts)
+            {
+                builder.AppendLine($"        <div class='summary-row'>{Escape(BuildAsteroidBeltSummaryLine(belt))}</div>");
+            }
         }
         builder.AppendLine("      </div>");
         builder.AppendLine("      <div class='summary-card'>");
@@ -5258,11 +5586,12 @@ static class TerritorySolarSystemValidationReportRenderer
         }
         builder.AppendLine("      </div>");
         builder.AppendLine("    </div>");
-        builder.AppendLine("    <div class='subtle'>Star gates share a rendered outer orbit in the same plane as the rest of the system.</div>");
+        builder.AppendLine("    <div class='subtle'>Asteroid belts and star gates share the same rendered system plane as planetary orbits.</div>");
         builder.AppendLine("    <canvas id='view' width='1200' height='840'></canvas>");
         builder.AppendLine("  </div>");
         builder.AppendLine("  <script>");
         builder.AppendLine($"    const planets = {planetsJson};");
+        builder.AppendLine($"    const belts = {beltsJson};");
         builder.AppendLine($"    const gates = {gatesJson};");
         builder.AppendLine($"    const gateOrbitRadius = {gateOrbitRadius:0.###};");
         builder.AppendLine($"    const sceneExtent = {sceneExtent:0.###};");
@@ -5311,6 +5640,14 @@ static class TerritorySolarSystemValidationReportRenderer
         builder.AppendLine("      const perspective = distance / (distance - shiftedZ);");
         builder.AppendLine("      return { x: canvas.width / 2 + panX + (point.x * perspective * baseScale), y: canvas.height / 2 + panY + (point.y * perspective * baseScale), scale: perspective, z: shiftedZ };");
         builder.AppendLine("    }");
+        builder.AppendLine("    function traceCircularOrbit(radius) {");
+        builder.AppendLine("      for (let step = 0; step <= orbitSteps; step++) {");
+        builder.AppendLine("        const angle = (Math.PI * 2 * step) / orbitSteps;");
+        builder.AppendLine("        const sample = { x: radius * Math.cos(angle), y: radius * Math.sin(angle), z: 0 };");
+        builder.AppendLine("        const projected = project(rotateView(sample));");
+        builder.AppendLine("        if (step === 0) { ctx.moveTo(projected.x, projected.y); } else { ctx.lineTo(projected.x, projected.y); }");
+        builder.AppendLine("      }");
+        builder.AppendLine("    }");
         builder.AppendLine("    function drawOrbit(planet) {");
         builder.AppendLine("      ctx.strokeStyle = planet.orbitStroke;");
         builder.AppendLine("      ctx.lineWidth = planet.orbitWidth;");
@@ -5321,6 +5658,29 @@ static class TerritorySolarSystemValidationReportRenderer
         builder.AppendLine("        if (step === 0) { ctx.moveTo(projected.x, projected.y); } else { ctx.lineTo(projected.x, projected.y); }");
         builder.AppendLine("      }");
         builder.AppendLine("      ctx.stroke();");
+        builder.AppendLine("    }");
+        builder.AppendLine("    function drawBelt(belt) {");
+        builder.AppendLine("      const innerRadius = Math.max(0.08, belt.radius - belt.halfWidth);");
+        builder.AppendLine("      const outerRadius = belt.radius + belt.halfWidth;");
+        builder.AppendLine("      ctx.fillStyle = belt.fill;");
+        builder.AppendLine("      ctx.beginPath();");
+        builder.AppendLine("      traceCircularOrbit(outerRadius);");
+        builder.AppendLine("      for (let step = orbitSteps; step >= 0; step--) {");
+        builder.AppendLine("        const angle = (Math.PI * 2 * step) / orbitSteps;");
+        builder.AppendLine("        const sample = { x: innerRadius * Math.cos(angle), y: innerRadius * Math.sin(angle), z: 0 };");
+        builder.AppendLine("        const projected = project(rotateView(sample));");
+        builder.AppendLine("        ctx.lineTo(projected.x, projected.y);");
+        builder.AppendLine("      }");
+        builder.AppendLine("      ctx.closePath();");
+        builder.AppendLine("      ctx.fill();");
+        builder.AppendLine("      ctx.save();");
+        builder.AppendLine("      ctx.strokeStyle = belt.stroke;");
+        builder.AppendLine("      ctx.lineWidth = 1.4;");
+        builder.AppendLine("      ctx.setLineDash([5, 8]);");
+        builder.AppendLine("      ctx.beginPath();");
+        builder.AppendLine("      traceCircularOrbit(belt.radius);");
+        builder.AppendLine("      ctx.stroke();");
+        builder.AppendLine("      ctx.restore();");
         builder.AppendLine("    }");
         builder.AppendLine("    function drawStar() {");
         builder.AppendLine("      const projected = project(rotateView({ x: 0, y: 0, z: 0 }));");
@@ -5341,12 +5701,7 @@ static class TerritorySolarSystemValidationReportRenderer
         builder.AppendLine("      ctx.strokeStyle = strokeStyle;");
         builder.AppendLine("      ctx.lineWidth = lineWidth;");
         builder.AppendLine("      ctx.beginPath();");
-        builder.AppendLine("      for (let step = 0; step <= orbitSteps; step++) {");
-        builder.AppendLine("        const angle = (Math.PI * 2 * step) / orbitSteps;");
-        builder.AppendLine("        const sample = { x: radius * Math.cos(angle), y: radius * Math.sin(angle), z: 0 };");
-        builder.AppendLine("        const projected = project(rotateView(sample));");
-        builder.AppendLine("        if (step === 0) { ctx.moveTo(projected.x, projected.y); } else { ctx.lineTo(projected.x, projected.y); }");
-        builder.AppendLine("      }");
+        builder.AppendLine("      traceCircularOrbit(radius);");
         builder.AppendLine("      ctx.stroke();");
         builder.AppendLine("    }");
         builder.AppendLine("    function drawGate(entry) {");
@@ -5396,6 +5751,7 @@ static class TerritorySolarSystemValidationReportRenderer
         builder.AppendLine("      ctx.clearRect(0, 0, canvas.width, canvas.height);");
         builder.AppendLine("      ctx.fillStyle = '#06111d';");
         builder.AppendLine("      ctx.fillRect(0, 0, canvas.width, canvas.height);");
+        builder.AppendLine("      for (const belt of belts) { drawBelt(belt); }");
         builder.AppendLine("      for (const planet of planets) { drawOrbit(planet); }");
         builder.AppendLine("      if (gates.length > 0) { drawCircularOrbit(gateOrbitRadius, 'rgba(94, 128, 154, 0.72)', 1.25); }");
         builder.AppendLine("      const projectedGates = gates.map(gate => { const rotated = rotateView(gate.position); return { gate, projected: project(rotated), depth: rotated.z }; }).sort((left, right) => left.depth - right.depth);");
@@ -5445,6 +5801,25 @@ static class TerritorySolarSystemValidationReportRenderer
             var phase = GetDeterministicAngleRadians($"{system.Address}|{planet.Name}|phase");
             var orbitRy = planet.SemiMajorAxisAu * Math.Sqrt(Math.Max(0.0, 1.0 - (planet.Eccentricity * planet.Eccentricity)));
             builder.Append($"{{\"name\":\"{Escape(planet.Name)}\",\"shortLabel\":\"{Escape(GetPlanetShortLabel(system, planet))}\",\"orbitRx\":{planet.SemiMajorAxisAu:0.###},\"orbitRy\":{orbitRy:0.###},\"focusOffset\":{(planet.SemiMajorAxisAu * planet.Eccentricity):0.###},\"phase\":{phase:0.######},\"orbitRotationRad\":{orbitRotation:0.######},\"inclinationRad\":{((planet.InclinationDeg * Math.PI) / 180.0):0.######},\"radius\":{GetPlanetMarkerRadius(planet.PlanetType):0.0},\"fill\":\"{GetPlanetColor(planet.PlanetType, planet.IsHabitable)}\",\"stroke\":\"{GetPlanetStrokeColor(planet.PlanetType, planet.IsHabitable)}\",\"glow\":\"{GetPlanetGlowColor(planet.PlanetType, planet.IsHabitable)}\",\"orbitStroke\":\"{GetPlanetOrbitStroke(planet.PlanetType, planet.IsHabitable)}\",\"orbitWidth\":{(planet.HasRings ? 1.35 : 1.10):0.00},\"hasRings\":{planet.HasRings.ToString().ToLowerInvariant()},\"isHabitable\":{planet.IsHabitable.ToString().ToLowerInvariant()}}}");
+        }
+
+        builder.Append(']');
+        return builder.ToString();
+    }
+
+    private static string BuildSystemBelt3DJson(ReportedSolarSystem system)
+    {
+        var builder = new StringBuilder();
+        builder.Append('[');
+        for (var index = 0; index < system.AsteroidBelts.Count; index++)
+        {
+            var belt = system.AsteroidBelts[index];
+            if (index > 0)
+            {
+                builder.Append(',');
+            }
+
+            builder.Append($"{{\"label\":\"{Escape(BuildAsteroidBeltSummaryLine(belt))}\",\"radius\":{belt.CenterDistanceAu:0.###},\"halfWidth\":{(belt.WidthAu * 0.5):0.###},\"fill\":\"{GetAsteroidBeltFillColor(belt.CompositionBand)}\",\"stroke\":\"{GetAsteroidBeltStrokeColor(belt.CompositionBand)}\",\"sites\":{belt.ConcurrentMiningSiteCapacity}}}");
         }
 
         builder.Append(']');
@@ -5543,6 +5918,11 @@ static class TerritorySolarSystemValidationReportRenderer
         return $"{GetPlanetShortLabel(system, planet)} | {planet.SemiMajorAxisAu:0.00} AU | {planet.PlanetType} | {planet.MoonCount} moon(s) | {planet.RingCount} ring(s)";
     }
 
+    private static string BuildAsteroidBeltSummaryLine(GeneratedAsteroidBeltProfile belt)
+    {
+        return $"{belt.SizeTier} belt | {belt.CompositionBand} | {belt.InnerEdgeAu:0.00}-{belt.OuterEdgeAu:0.00} AU | {belt.ConcurrentMiningSiteCapacity} sites";
+    }
+
     private static string BuildGateSummaryLine(SolarSystemGateSummary gate)
     {
         return $"{gate.GateType} -> {gate.TargetAddress} | {gate.DistanceLy:0.00} ly";
@@ -5575,6 +5955,26 @@ static class TerritorySolarSystemValidationReportRenderer
             "Heavy" => "#f6bd60",
             "Medium" => "#9ed8ff",
             _ => "#b7f0c7"
+        };
+    }
+
+    private static string GetAsteroidBeltFillColor(string compositionBand)
+    {
+        return compositionBand switch
+        {
+            "Near" => "#d4a373",
+            "Mid-range" => "#9bb4c9",
+            _ => "#85c7c2"
+        };
+    }
+
+    private static string GetAsteroidBeltStrokeColor(string compositionBand)
+    {
+        return compositionBand switch
+        {
+            "Near" => "#f6bd60",
+            "Mid-range" => "#9ed8ff",
+            _ => "#9be6d0"
         };
     }
 
@@ -5892,6 +6292,7 @@ static class TerritorySolarSystemValidationReportRenderer
         string ContentsSummary,
         string FlavorText,
         IReadOnlyList<GeneratedPlanetProfile> Planets,
+        IReadOnlyList<GeneratedAsteroidBeltProfile> AsteroidBelts,
         IReadOnlyList<SolarSystemGateSummary> Gates,
         IReadOnlyList<ValidationCheck> ValidationChecks,
         IReadOnlyList<ProjectionWarning> Warnings,
@@ -5904,7 +6305,10 @@ static class TerritorySolarSystemValidationReportRenderer
     {
         public bool HasRings => RingCount > 0;
     }
-    private sealed record GeneratedSystemProfile(string DisplayName, GeneratedStarProfile Star, string StellarSummary, string ContentsSummary, string FlavorText, IReadOnlyList<GeneratedPlanetProfile> Planets);
+    private sealed record GeneratedAsteroidBeltProfile(string SizeTier, string CompositionBand, double InnerEdgeAu, double OuterEdgeAu, double CenterDistanceAu, double WidthAu, int ConcurrentMiningSiteCapacity);
+    private sealed record AsteroidBeltOccupiedBand(double InnerEdgeAu, double OuterEdgeAu);
+    private sealed record AsteroidBeltCandidate(double InnerEdgeAu, double OuterEdgeAu, double CenterDistanceAu, double AvailableSpanAu);
+    private sealed record GeneratedSystemProfile(string DisplayName, GeneratedStarProfile Star, string StellarSummary, string ContentsSummary, string FlavorText, IReadOnlyList<GeneratedPlanetProfile> Planets, IReadOnlyList<GeneratedAsteroidBeltProfile> AsteroidBelts);
     private sealed record ValidationCheck(string Name, bool Passed);
     private sealed record ProjectionWarning(string Name, bool IsTriggered);
     private sealed record ValidationResult(IReadOnlyList<ValidationCheck> HardChecks, IReadOnlyList<ProjectionWarning> Warnings);
